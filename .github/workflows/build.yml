@@ -1,0 +1,61 @@
+name: Build Android & Windows
+
+on:
+  push:
+    branches: [main, 'arena/**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Android APK
+            os: ubuntu-latest
+            target: android
+            artifact: Vale-Android-APK
+            path: app/build/outputs/apk/debug/*.apk
+          - name: Windows EXE
+            os: windows-2022
+            target: windows
+            artifact: Vale-Windows-EXE
+            path: app/build/compose/binaries/main/exe/*.exe
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Add WiX to PATH (Windows)
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          $wix = Get-ChildItem "${env:ProgramFiles(x86)}\WiX Toolset v3*\bin" -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($wix) { $wix.FullName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append }
+      - name: Build Android debug APK
+        if: matrix.target == 'android'
+        run: ./gradlew :app:assembleDebug --stacktrace
+      - name: Test and package Windows
+        if: matrix.target == 'windows'
+        run: ./gradlew :app:desktopTest :app:packageExe --stacktrace
+      - name: Upload application
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.path }}
+          if-no-files-found: error
+          retention-days: 30
