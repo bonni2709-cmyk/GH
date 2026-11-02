@@ -23,13 +23,14 @@ internal object TorTransport {
 
     fun send(endpoint: String, socksPort: Int, packet: String, hops: Int = 3): Boolean = sendReceipt(endpoint, socksPort, packet, hops) != null
 
-    fun sendReceipt(endpoint: String, socksPort: Int, packet: String, hops: Int = 3): String? {
+    fun sendReceipt(endpoint: String, socksPort: Int, packet: String, hops: Int = 3, sockets: OutboundSockets? = null): String? {
         val (host, port) = parse(endpoint) ?: return null
         if (socksPort !in 1..65535 || hops !in 0..3) return null
         val bytes = packet.toByteArray(Charsets.UTF_8)
         if (bytes.size !in 1..MAX_PACKET_SIZE) return null
+        val socket = sockets?.open() ?: if (sockets == null) Socket() else return null
         return try {
-            Socket().use { socket ->
+            socket.use {
                 // Connect only to the local Tor proxy. Hostname is carried inside SOCKS5.
                 socket.connect(InetSocketAddress(InetAddress.getByName("127.0.0.1"), socksPort), 3_000)
                 socket.soTimeout = 180_000
@@ -54,6 +55,7 @@ internal object TorTransport {
                 String(response, Charsets.US_ASCII)
             }
         } catch (_: Exception) { null }
+        finally { sockets?.release(socket) }
     }
 
     private fun DataInputStream.skipFully(size: Int) { val ignored = ByteArray(size); readFully(ignored) }

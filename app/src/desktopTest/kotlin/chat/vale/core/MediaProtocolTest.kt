@@ -20,6 +20,8 @@ class MediaProtocolTest {
         assertEquals(sticker, decodeContent(encodeContent(sticker)))
         assertContentEquals(png, assertNotNull(decodeContent(encodeContent(sticker))).media.unb64())
         assertFalse(validContent(sticker.copy(mime = "image/svg+xml")))
+        assertFalse(validContent(Content("text", text = "hello", media = png.b64())))
+        assertFalse(validContent(sticker.copy(sdp = "unexpected")))
         val ebml = byteArrayOf(0x1a, 0x45, 0xdf.toByte(), 0xa3.toByte(), 0, 0, 0, 0)
         val audio = Content("audio", media = ebml.b64(), mime = "audio/webm;codecs=opus", durationMs = 1_000)
         assertTrue(validContent(audio))

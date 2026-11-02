@@ -1,10 +1,14 @@
 package chat.vale.core
 
 import java.net.ServerSocket
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class TransportTest {
@@ -23,4 +27,30 @@ class TransportTest {
             assertEquals("test/2", received.get())
         } finally { listener.close() }
     }
+    @Test fun closingNetworkEpochInterruptsPendingSend() {
+        ServerSocket(0).use { server ->
+            val accepted = CountDownLatch(1)
+            val peer = Thread {
+                server.accept().use { socket ->
+                    accepted.countDown()
+                    // Do not send a receipt; the client should be cancelled instead of waiting.
+                    try { while (socket.getInputStream().read() != -1) { } } catch (_: Exception) { }
+                }
+            }.apply { isDaemon = true; start() }
+            val sockets = OutboundSockets()
+            val result = CompletableFuture.supplyAsync {
+                LanTransport.sendReceipt("127.0.0.1:${server.localPort}", "packet", sockets = sockets)
+            }
+            try {
+                assertTrue(accepted.await(5, TimeUnit.SECONDS))
+                sockets.close()
+                assertNull(result.get(5, TimeUnit.SECONDS))
+                assertNull(sockets.open())
+            } finally {
+                sockets.close()
+                peer.join(5_000)
+            }
+        }
+    }
+
 }

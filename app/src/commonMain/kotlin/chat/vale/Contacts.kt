@@ -3,6 +3,8 @@ package chat.vale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -86,24 +88,29 @@ internal fun AddContactDialog(controller: ValeController, existing: ContactView?
         onDismissRequest = { if (!scanning) onClose() },
         title = { Text(if (existing == null) "Новый контакт" else "Изменить контакт", fontSize = 21.sp, fontWeight = FontWeight.SemiBold, color = Ink) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Добавьте друг друга и проверьте ID при личной встрече. Используйте локальный IP, onion-адрес или Nearby на Android.", color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
                 OutlinedTextField(name, { if (it.length <= 40) name = it }, label = { Text("Имя") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
                 OutlinedTextField(id, { if (it.length <= 220) id = it }, label = { Text("Публичный ID или QR-код") }, modifier = Modifier.fillMaxWidth(), minLines = 2, maxLines = 3, shape = RoundedCornerShape(12.dp), readOnly = existing != null)
                 OutlinedTextField(address, { if (it.length <= 100) address = it }, label = { Text("Локальный IP или .onion") }, placeholder = { Text("192.168.1.20 или адрес.onion") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
-                if (existing == null) {
-                    OutlinedButton(onClick = {
-                        scanning = true; scanFailed = false
-                        controller.scanQr { result ->
-                            scanning = false
-                            if (result != null) { id = result; address = "" } else scanFailed = true
+                OutlinedButton(onClick = {
+                    scanning = true; scanFailed = false
+                    controller.scanQr { result ->
+                        scanning = false
+                        if (result == null) scanFailed = true
+                        else if (existing == null) { id = result; address = "" }
+                        else {
+                            val parts = result.trim().split('|')
+                            if (parts.size == 3 && parts[0] == "vale1" && parts[1] == existing.id && parts[2].isNotBlank()) address = parts[2]
+                            else scanFailed = true
                         }
-                    }, enabled = !scanning, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
-                        Icon(Icons.Outlined.QrCodeScanner, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
-                        Text(if (scanning) "Поиск QR-кода…" else "Сканировать QR-код")
                     }
-                    if (scanFailed) Text("Камера недоступна или код не найден. Можно вставить ID вручную.", color = Red, fontSize = 11.sp)
-                } else {
+                }, enabled = !scanning, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                    Icon(Icons.Outlined.QrCodeScanner, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
+                    Text(if (scanning) "Поиск QR-кода…" else if (existing == null) "Сканировать QR-код" else "Обновить адрес по QR-коду")
+                }
+                if (scanFailed) Text(if (existing == null) "Камера недоступна или код не найден. Можно вставить ID вручную." else "Код не найден, не содержит адреса или принадлежит другому ID.", color = Red, fontSize = 11.sp)
+                if (existing != null) {
                     TextButton(onClick = { confirmDelete = true }) { Icon(Icons.Outlined.DeleteOutline, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Удалить контакт и переписку") }
                 }
             }

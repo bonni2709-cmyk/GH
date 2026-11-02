@@ -40,7 +40,7 @@ async function api(path,method='GET',body=null){
 }
 async function action(body){return api('/action','POST',body)}
 function toBase64Url(bytes){let s='';for(let i=0;i<bytes.length;i+=16384)s+=String.fromCharCode.apply(null,bytes.subarray(i,i+16384));return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')}
-let config, recorder=null, stream=null, chunks=[], blob=null, mediaKind='', mediaMime='', duration=0, started=0, timer=null, objectUrl=null, pc=null, callTimer=null, closing=false;
+let config, recorder=null, stream=null, chunks=[], recordedBytes=0, recordingBusy=false, blob=null, mediaKind='', mediaMime='', duration=0, started=0, timer=null, objectUrl=null, pc=null, callTimer=null, closing=false;
 function releaseStream(){if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}byId('preview').srcObject=null}
 function showPreview(b,kind){
   if(objectUrl)URL.revokeObjectURL(objectUrl);objectUrl=URL.createObjectURL(b);
@@ -50,20 +50,24 @@ function showPreview(b,kind){
   if(kind==='sticker')byId('imagePreview').src=objectUrl;
   byId('sendMedia').hidden=false;byId('discard').hidden=false;
 }
+function recordingButtons(active){['recordAudio','recordVideo','sticker'].forEach(id=>byId(id).disabled=active)}
 function discard(){blob=null;mediaKind='';if(objectUrl)URL.revokeObjectURL(objectUrl);objectUrl=null;['preview','audioPreview','imagePreview','sendMedia','discard'].forEach(id=>byId(id).hidden=true);setStatus('')}
 async function startRecording(kind){
+  if(recordingBusy||closing)return;
   discard();if(!navigator.mediaDevices||!window.MediaRecorder){setStatus('Браузер не поддерживает запись.',true);return}
   const choices=kind==='audio'?['audio/webm;codecs=opus']:['video/webm;codecs=h264,opus','video/webm;codecs=avc1,opus','video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/mp4;codecs=avc1,mp4a.40.2'];
   const mime=choices.find(x=>MediaRecorder.isTypeSupported(x));if(!mime){setStatus(kind==='video'?'В этом браузере недоступна запись H.264. Попробуйте Chrome или Edge с аппаратным кодеком.':'В этом браузере недоступна запись Opus.',true);return}
+  recordingBusy=true;recordingButtons(true);
   try{
     stream=await navigator.mediaDevices.getUserMedia(kind==='audio'?{audio:true}:{audio:true,video:{width:{ideal:360},height:{ideal:360},frameRate:{ideal:15,max:20},facingMode:'user'}});
+    if(closing){releaseStream();recordingBusy=false;recordingButtons(false);return}
     if(kind==='video'){const p=byId('preview');p.hidden=false;p.controls=false;p.muted=true;p.srcObject=stream;await p.play().catch(()=>{})}
-    chunks=[];mediaKind=kind;mediaMime=mime;started=Date.now();recorder=new MediaRecorder(stream,{mimeType:mime,audioBitsPerSecond:32000,videoBitsPerSecond:260000});
-    recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
-    recorder.onerror=()=>{releaseStream();setStatus('Ошибка записи.',true)};
-    recorder.onstop=()=>{clearTimeout(timer);duration=Math.min(Date.now()-started,60000);blob=new Blob(chunks,{type:mediaMime});releaseStream();byId('stopRecording').hidden=true;if(blob.size>config.maxBytes){discard();setStatus('Запись слишком большая. Запишите короче.',true)}else if(blob.size){showPreview(blob,mediaKind);setStatus('Проверьте запись перед отправкой.')}else setStatus('Пустая запись.',true)};
+    chunks=[];recordedBytes=0;mediaKind=kind;mediaMime=mime;started=Date.now();recorder=new MediaRecorder(stream,{mimeType:mime,audioBitsPerSecond:32000,videoBitsPerSecond:260000});
+    recorder.ondataavailable=e=>{if(e.data.size){chunks.push(e.data);recordedBytes+=e.data.size;if(recordedBytes>config.maxBytes&&recorder.state!=='inactive')recorder.stop()}};
+    recorder.onerror=()=>{releaseStream();recordingBusy=false;recordingButtons(false);setStatus('Ошибка записи.',true)};
+    recorder.onstop=()=>{clearTimeout(timer);recordingBusy=false;recordingButtons(false);duration=Math.min(Date.now()-started,60000);blob=new Blob(chunks,{type:mediaMime});releaseStream();byId('stopRecording').hidden=true;if(blob.size>config.maxBytes){discard();setStatus('Запись слишком большая. Запишите короче.',true)}else if(blob.size){showPreview(blob,mediaKind);setStatus('Проверьте запись перед отправкой.')}else setStatus('Пустая запись.',true)};
     recorder.start(300);byId('stopRecording').hidden=false;setStatus('Идёт запись…');timer=setTimeout(()=>{if(recorder&&recorder.state!=='inactive')recorder.stop()},kind==='audio'?60000:15000);
-  }catch(e){releaseStream();setStatus('Не удалось начать запись: проверьте разрешения и доступность устройства.',true)}
+  }catch(e){releaseStream();recordingBusy=false;recordingButtons(false);setStatus('Не удалось начать запись: проверьте разрешения и доступность устройства.',true)}
 }
 function stopRecording(){if(recorder&&recorder.state!=='inactive')recorder.stop()}
 async function chooseSticker(event){const f=event.target.files[0];if(!f)return;discard();if(!['image/png','image/webp','image/jpeg'].includes(f.type)||f.size>config.maxBytes){setStatus('Выберите PNG, WebP или JPEG до 768 КБ.',true);return}blob=f;mediaKind='sticker';mediaMime=f.type;duration=0;showPreview(blob,mediaKind);setStatus('Стикер готов к отправке.')}
@@ -75,6 +79,7 @@ async function startCall(){
   if(pc)return;byId('beginCall').disabled=true;
   try{
     stream=await navigator.mediaDevices.getUserMedia({audio:true,video:config.video});
+    if(closing){releaseStream();return}
     if(config.video){byId('localVideo').hidden=false;byId('localVideo').srcObject=stream}
     pc=new RTCPeerConnection({iceServers:[]});stream.getTracks().forEach(track=>pc.addTrack(track,stream));
     pc.ontrack=e=>{const remote=e.streams[0]||new MediaStream([e.track]);if(e.track.kind==='video'){byId('remoteVideo').hidden=false;byId('remoteVideo').srcObject=remote}else byId('remoteAudio').srcObject=remote};
@@ -86,7 +91,7 @@ async function startCall(){
   }catch(e){stopCallMedia();byId('beginCall').disabled=false;setStatus('Не удалось начать звонок: проверьте разрешения и сеть.',true)}
 }
 async function hangup(){if(closing)return;closing=true;stopCallMedia();try{await callAction('hangup')}catch(e){}setStatus('Звонок завершён.')}
-window.addEventListener('pagehide',()=>{if((!config||config.mode==='call')&&!closing){closing=true;stopCallMedia();fetch('/action',{method:'POST',headers:{'X-Vale-Token':token,'Content-Type':'application/json'},body:JSON.stringify({action:'hangup'}),keepalive:true}).catch(()=>{})}});
+window.addEventListener('pagehide',()=>{const notify=(!config||config.mode==='call')&&!closing;closing=true;stopRecording();stopCallMedia();if(notify)fetch('/action',{method:'POST',headers:{'X-Vale-Token':token,'Content-Type':'application/json'},body:JSON.stringify({action:'hangup'}),keepalive:true}).catch(()=>{})});
 async function init(){
   try{config=await (await api('/config')).json();byId('intro').textContent=config.contact?'Разговор с '+config.contact:'';
     if(config.mode==='studio'){byId('title').textContent='Поделиться моментом';byId('studio').hidden=false}

@@ -56,6 +56,7 @@ class Engine(
     @Volatile private var vault = Vault()
     @Volatile private var store: EncryptedStore? = null
     @Volatile private var transport: LanTransport? = null
+    @Volatile private var outgoing: OutboundSockets? = null
     @Volatile private var nearby: NearbyLink? = null
     @Volatile private var tor: TorHandle? = null
     @Volatile private var torSocksPort: Int = 0
@@ -91,8 +92,11 @@ class Engine(
                 while (true) {
                     delay(8_000)
                     if (!mutable.value.panic) {
+                        val address = LanTransport.localAddress()
+                        mutable.update { it.copy(localAddress = address) }
                         cleanExpired()
-                        retryPending()
+                        // A stalled relay may take minutes; expiry cleanup must not wait for it.
+                        scope.launch { retryPending() }
                     }
                 }
             } catch (e: Exception) {
@@ -152,13 +156,18 @@ class Engine(
         val contact = mutable.value.selectedContact ?: return
         val content = text.trim()
         if (content.isEmpty()) return
+        if (!validContent(Content(kind = "text", text = content))) {
+            error("Сообщение слишком длинное: не более 16 КБ текста")
+            return
+        }
         scope.launch {
             try {
                 mutate { old ->
                     val identity = requireNotNull(old.identity)
-                    require(old.contacts.any { it.id == contact })
+                    require(!old.panicMode && !mutable.value.panic && old.contacts.any { it.id == contact })
                     require(old.messages.size < MAX_MESSAGES) { "Достигнут лимит истории" }
-                    val packet = crypto.seal(identity, contact, content, old.expirySeconds, System.currentTimeMillis())
+                    // Always frame text too: literal user text may begin with the content marker.
+                    val packet = crypto.seal(identity, contact, encodeContent(Content(kind = "text", text = content)), old.expirySeconds, System.currentTimeMillis())
                     old.copy(messages = old.messages + Message(packet.id, contact, content, true,
                         packet.createdAt, packet.expiresAt, json.encodeToString(packet)))
                 }
@@ -382,13 +391,20 @@ class Engine(
                 return
             }
         }
+        // Interrupt reads/connects from the old network epoch before switching policy.
+        synchronized(networkLock) {
+            outgoing?.close(); outgoing = null
+            if (enabled) stopNearby()
+        }
         scope.launch {
             try {
                 stopNetwork()
                 mutate { it.copy(torEnabled = enabled, controls = emptyList()) }
                 startNetwork()
-            } catch (_: Exception) { error("Не удалось изменить настройки Tor") }
-            finally {
+            } catch (_: Exception) {
+                error("Не удалось изменить настройки Tor")
+                if (!closed && !mutable.value.panic) startNetwork()
+            } finally {
                 networkTransition = false
                 if (!vault.torEnabled && !mutable.value.panic && !closed) startNearby()
             }
@@ -447,6 +463,7 @@ class Engine(
     private fun startNetwork() {
         synchronized(networkLock) {
             if (closed || transport != null || mutable.value.panic || vault.identity == null) return
+            if (outgoing == null) outgoing = OutboundSockets()
             val candidate = LanTransport(listenPort, loopbackOnly = vault.torEnabled) { packet, hops -> runBlocking { receive(packet, hops) } }
             if (candidate.start()) {
                 transport = candidate
@@ -463,6 +480,7 @@ class Engine(
 
     private fun stopNetwork() {
         synchronized(networkLock) {
+            outgoing?.close(); outgoing = null
             transport?.close(); transport = null
             stopNearby(); stopTor()
             mutable.update { it.copy(networkAvailable = false) }
@@ -542,22 +560,31 @@ class Engine(
     }
 
     private fun transmit(snapshot: Vault, targetId: String, senderId: String?, encoded: String, hops: Int): String? {
-        if (mutable.value.panic || networkTransition || snapshot.torEnabled != vault.torEnabled) return null
+        val sockets = outgoing ?: return null
         val packet = try { json.decodeFromString<Packet>(encoded) } catch (_: Exception) { return null }
-        if (packet.to != targetId) return null
+        fun allowed() = !mutable.value.panic && !networkTransition && snapshot.torEnabled == vault.torEnabled && outgoing === sockets &&
+            (packet.expiresAt == 0L || packet.expiresAt > System.currentTimeMillis()) && packet.createdAt >= System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000
+        if (!allowed() || packet.to != targetId) return null
         fun verified(receipt: String?): String? = receipt?.takeIf { crypto.verifyReceipt(packet, it) }
         val direct = snapshot.contacts.firstOrNull { it.id == targetId }?.address.orEmpty()
         val candidates = snapshot.contacts.asSequence().filter { it.id != targetId && it.id != senderId }
             .map { it.address }.filter { it.isNotBlank() && it != direct }.distinct().take(4)
         if (snapshot.torEnabled) {
-            if (torSocksPort == 0) return null
-            if (direct.isNotBlank()) verified(TorTransport.sendReceipt(direct, torSocksPort, encoded, hops))?.let { return it }
-            for (address in candidates) verified(TorTransport.sendReceipt(address, torSocksPort, encoded, hops))?.let { return it }
+            val socksPort = torSocksPort
+            if (socksPort == 0) return null
+            if (direct.isNotBlank() && allowed()) verified(TorTransport.sendReceipt(direct, socksPort, encoded, hops, sockets))?.let { return it }
+            for (address in candidates) {
+                if (!allowed()) return null
+                verified(TorTransport.sendReceipt(address, socksPort, encoded, hops, sockets))?.let { return it }
+            }
             return null
         }
-        if (direct.isNotBlank()) verified(LanTransport.sendReceipt(direct, encoded, hops))?.let { return it }
-        verified(nearby?.send(encoded, hops) { crypto.verifyReceipt(packet, it) })?.let { return it }
-        for (address in candidates) verified(LanTransport.sendReceipt(address, encoded, hops))?.let { return it }
+        if (direct.isNotBlank() && allowed()) verified(LanTransport.sendReceipt(direct, encoded, hops, sockets))?.let { return it }
+        if (allowed()) verified(nearby?.send(encoded, hops) { crypto.verifyReceipt(packet, it) })?.let { return it }
+        for (address in candidates) {
+            if (!allowed()) return null
+            verified(LanTransport.sendReceipt(address, encoded, hops, sockets))?.let { return it }
+        }
         return null
     }
 
@@ -565,16 +592,16 @@ class Engine(
         if (mutable.value.panic || (transport == null && nearby == null) || !retryMutex.tryLock()) return
         try {
             val snapshot = vault
-            val now = System.currentTimeMillis()
             for (control in snapshot.controls.take(32)) {
                 if (mutable.value.panic) return
-                if (control.expiresAt <= now) continue
+                if (control.expiresAt <= System.currentTimeMillis()) continue
                 val target = snapshot.contacts.firstOrNull { it.id == control.contactId } ?: continue
                 val sent = transmit(snapshot, target.id, null, control.packet, 3)
                 if (sent != null) try { mutate { old -> old.copy(controls = old.controls.filterNot { it.id == control.id }) } } catch (_: Exception) { }
             }
             for (message in snapshot.messages.filter { it.pendingPacket != null }.take(30)) {
                 if (mutable.value.panic) return
+                val now = System.currentTimeMillis()
                 if (message.expiresAt != 0L && message.expiresAt <= now) continue
                 if (message.createdAt < now - 7L * 24 * 60 * 60 * 1000) continue
                 val target = snapshot.contacts.firstOrNull { it.id == message.contactId } ?: continue

@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 @Composable
 internal fun ProfileScreen(controller: ValeController, state: ValeState) {
     val qr = remember(state.publicId, state.localAddress, state.torOnion, state.torEnabled) { controller.qrGrid(controller.contactCard()) }
+    val cardReady = !state.torEnabled || state.torOnion.isNotBlank()
     var copied by remember { mutableStateOf(false) }
     var cardCopied by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize().background(CanvasColor).verticalScroll(rememberScrollState()).padding(28.dp), contentAlignment = Alignment.TopCenter) {
@@ -44,12 +45,15 @@ internal fun ProfileScreen(controller: ValeController, state: ValeState) {
                     Text("Ваш профиль хранится на устройстве", color = Muted, fontSize = 12.sp)
                     Spacer(Modifier.height(26.dp))
                     Box(Modifier.background(Color.White, RoundedCornerShape(16.dp)).border(1.dp, Line, RoundedCornerShape(16.dp)).padding(12.dp)) {
-                        QrImage(qr, Modifier.size(190.dp))
+                        if (cardReady) QrImage(qr, Modifier.size(190.dp))
+                        else Box(Modifier.size(190.dp), contentAlignment = Alignment.Center) {
+                            Text("Адрес Tor ещё создаётся", color = Muted, fontSize = 12.sp, textAlign = TextAlign.Center)
+                        }
                     }
                     Spacer(Modifier.height(18.dp))
                     Text("Покажите этот код контакту", color = Ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(6.dp))
-                    Text(if (state.torEnabled) "QR содержит публичный ID и адрес onion. Делитесь им только с доверенными контактами." else "QR содержит публичный ID и локальный IP. Не публикуйте его, если не хотите делиться адресом.", color = Muted, fontSize = 11.sp, lineHeight = 17.sp, textAlign = TextAlign.Center)
+                    Text(if (state.torEnabled && !cardReady) "Дождитесь создания onion-адреса, прежде чем делиться карточкой." else if (state.torEnabled) "QR содержит публичный ID и адрес onion. Делитесь им только с доверенными контактами." else "QR содержит публичный ID и локальный IP. Не публикуйте его, если не хотите делиться адресом.", color = Muted, fontSize = 11.sp, lineHeight = 17.sp, textAlign = TextAlign.Center)
                     Spacer(Modifier.height(22.dp))
                     Column(Modifier.fillMaxWidth().background(CanvasColor, RoundedCornerShape(12.dp)).padding(14.dp)) {
                         SectionEyebrow("ПУБЛИЧНЫЙ ID")
@@ -61,7 +65,7 @@ internal fun ProfileScreen(controller: ValeController, state: ValeState) {
                         Icon(Icons.Outlined.ContentCopy, null, Modifier.size(17.dp)); Spacer(Modifier.width(8.dp)); Text(if (copied) "ID скопирован" else "Скопировать ID")
                     }
                     Spacer(Modifier.height(8.dp))
-                    TextButton(onClick = { controller.copyText(controller.contactCard()); cardCopied = true }) {
+                    TextButton(onClick = { controller.copyText(controller.contactCard()); cardCopied = true }, enabled = cardReady) {
                         Text(if (cardCopied) "Карточка скопирована" else "Скопировать ID и адрес", color = Forest, fontSize = 12.sp)
                     }
                     Spacer(Modifier.height(5.dp))

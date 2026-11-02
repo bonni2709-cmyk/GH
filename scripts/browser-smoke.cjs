@@ -35,8 +35,8 @@ async function fixture(role) {
       if (req.url === '/' && req.method === 'GET') { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' }); res.end(page); return; }
       if (req.headers['x-vale-token'] !== token) { res.writeHead(403); res.end(); return; }
       if (req.url === '/config') {
-        const config = role === 'studio' ? { mode: 'studio', contact: 'Bob', maxBytes: 768 * 1024 } :
-          { mode: 'call', contact: role === 'a' ? 'Bob' : 'Alice', video: false, role: role === 'a' ? 'offer' : 'answer', offer: channel.offer, maxBytes: 768 * 1024 };
+        const config = role === 'studio' ? { mode: 'studio', contact: 'Bob', maxBytes: 768000 } :
+          { mode: 'call', contact: role === 'a' ? 'Bob' : 'Alice', video: false, role: role === 'a' ? 'offer' : 'answer', offer: channel.offer, maxBytes: 768000 };
         res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(config)); return;
       }
       if (req.url === '/events') {
@@ -128,9 +128,11 @@ async function run() {
     await waitFor(() => studio.evaluate("document.getElementById('studio') && !document.getElementById('studio').hidden"), 'studio ready');
     await studio.evaluate("document.getElementById('recordAudio').click(); true");
     await waitFor(() => studio.evaluate("!document.getElementById('stopRecording').hidden"), 'fake microphone');
+    assert(await studio.evaluate("document.getElementById('recordAudio').disabled && document.getElementById('recordVideo').disabled"), 'Recording controls must be disabled while capturing');
     await sleep(1_300);
     await studio.evaluate("document.getElementById('stopRecording').click(); true");
     await waitFor(() => studio.evaluate("!document.getElementById('sendMedia').hidden"), 'audio preview');
+    assert(await studio.evaluate("!document.getElementById('recordAudio').disabled && !document.getElementById('recordVideo').disabled"), 'Recording controls did not reset');
     await studio.evaluate("document.getElementById('sendMedia').click(); true");
     await waitFor(() => channel.submissions.length === 1, 'Opus submission');
     const audio = channel.submissions[0];

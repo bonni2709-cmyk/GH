@@ -12,11 +12,13 @@ internal fun decodeContent(value: String): Content? = try {
 } catch (_: Exception) { null }
 
 internal fun validContent(c: Content): Boolean = try {
+    val noAttachment = c.media.isEmpty() && c.mime.isEmpty() && c.durationMs == 0L
+    val noCall = c.callId.isEmpty() && c.sdp.isEmpty() && !c.video
     when (c.kind) {
-        "text" -> c.text.isNotBlank() && c.text.toByteArray(Charsets.UTF_8).size <= 16_384
-        "sticker-emoji" -> c.text.isNotBlank() && c.text.length <= 16 && c.media.isEmpty()
+        "text" -> noAttachment && noCall && c.text.isNotBlank() && c.text.toByteArray(Charsets.UTF_8).size <= 16_384
+        "sticker-emoji" -> noAttachment && noCall && c.text.isNotBlank() && c.text.length <= 16
         "sticker", "audio", "video" -> {
-            if (c.media.length > (MAX_MEDIA_BYTES * 4 / 3 + 8) || c.media.isEmpty()) false
+            if (c.text.isNotEmpty() || !noCall || c.media.length > (MAX_MEDIA_BYTES * 4 / 3 + 8) || c.media.isEmpty()) false
             else {
                 val bytes = c.media.unb64()
                 val mime = c.mime.lowercase()
@@ -33,8 +35,8 @@ internal fun validContent(c: Content): Boolean = try {
                 }
             }
         }
-        "call-offer", "call-answer" -> c.callId.matches(Regex("[A-Za-z0-9_-]{22}")) && c.sdp.length in 1..32_000 && c.sdp.startsWith("v=0")
-        "call-end" -> c.callId.matches(Regex("[A-Za-z0-9_-]{22}")) && c.sdp.isEmpty()
+        "call-offer", "call-answer" -> noAttachment && c.text.isEmpty() && c.callId.matches(Regex("[A-Za-z0-9_-]{22}")) && c.sdp.length in 1..32_000 && c.sdp.startsWith("v=0")
+        "call-end" -> noAttachment && c.text.isEmpty() && !c.video && c.callId.matches(Regex("[A-Za-z0-9_-]{22}")) && c.sdp.isEmpty()
         else -> false
     }
 } catch (_: Exception) { false }

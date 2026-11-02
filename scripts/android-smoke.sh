@@ -158,3 +158,53 @@ if [[ $onion != 1 ]]; then
     exit 1
 fi
 echo 'Android Tor native service generated an onion address.'
+
+# The v3 hostname alone can be left over from an earlier run. Exercise the actual
+# local SOCKS5 listener, then restart the app and verify Tor and identity persist.
+check_socks() {
+    local port forwarded
+    port=$(adb shell run-as chat.vale.app cat app_TorService/torrc | tr -d '\r' | sed -nE 's/^SOCKSPort 127\.0\.0\.1:([0-9]+)$/\1/p')
+    [[ "$port" =~ ^[0-9]+$ ]] || { echo 'Tor SOCKS port not found in configuration' >&2; return 1; }
+    forwarded=$(adb forward tcp:0 "tcp:$port" | tr -d '\r')
+    python3 - "$forwarded" <<'PY_SOCKS'
+import socket, sys, time
+port = int(sys.argv[1])
+deadline = time.monotonic() + 30
+while time.monotonic() < deadline:
+    try:
+        with socket.create_connection(('127.0.0.1', port), timeout=2) as conn:
+            conn.sendall(b'\x05\x01\x00')
+            response = b''
+            while len(response) < 2:
+                chunk = conn.recv(2 - len(response))
+                if not chunk:
+                    break
+                response += chunk
+            if response == b'\x05\x00':
+                sys.exit(0)
+    except OSError:
+        pass
+    time.sleep(0.5)
+raise SystemExit('Android Tor SOCKS5 listener did not respond')
+PY_SOCKS
+    adb forward --remove "tcp:$forwarded"
+}
+hostname_before=$(adb shell run-as chat.vale.app cat no_backup/tor/onion/hostname | tr -d '\r\n')
+check_socks
+echo 'Android Tor SOCKS5 handshake succeeded.'
+adb shell am force-stop chat.vale.app
+adb shell am start -W -n chat.vale.app/chat.vale.android.MainActivity
+service=0
+for _ in {1..30}; do
+    if adb shell dumpsys activity services chat.vale.app | grep -q 'org.torproject.jni.TorService'; then service=1; break; fi
+    sleep 2
+done
+if [[ $service != 1 ]]; then
+    echo 'Android did not restart its Tor service' >&2
+    adb logcat -d -s TorService:D AndroidRuntime:E System.err:W | tail -120 || true
+    exit 1
+fi
+check_socks
+hostname_after=$(adb shell run-as chat.vale.app cat no_backup/tor/onion/hostname | tr -d '\r\n')
+[[ "$hostname_before" == "$hostname_after" ]] || { echo 'Android onion identity changed after restart' >&2; exit 1; }
+echo 'Android restored Tor mode, SOCKS5, and the same onion identity after restart.'

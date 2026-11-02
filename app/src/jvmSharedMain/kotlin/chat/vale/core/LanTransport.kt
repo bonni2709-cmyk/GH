@@ -98,12 +98,13 @@ internal class LanTransport(
 
         fun send(address: String, packet: String, hops: Int = 3): Boolean = sendReceipt(address, packet, hops) != null
 
-        fun sendReceipt(address: String, packet: String, hops: Int = 3): String? {
+        fun sendReceipt(address: String, packet: String, hops: Int = 3, sockets: OutboundSockets? = null): String? {
             val endpoint = parseEndpoint(address) ?: return null
             val bytes = packet.toByteArray(Charsets.UTF_8)
             if (bytes.size !in 1..MAX_PACKET_SIZE || hops !in 0..3) return null
+            val socket = sockets?.open() ?: if (sockets == null) Socket() else return null
             return try {
-                Socket().use { socket ->
+                socket.use {
                     socket.connect(endpoint, 2_000)
                     socket.soTimeout = 180_000
                     DataOutputStream(socket.getOutputStream()).apply {
@@ -116,6 +117,7 @@ internal class LanTransport(
                     String(response, Charsets.US_ASCII)
                 }
             } catch (_: Exception) { null }
+            finally { sockets?.release(socket) }
         }
 
         fun localAddress(): String = try {
