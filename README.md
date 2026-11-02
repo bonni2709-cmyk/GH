@@ -45,7 +45,7 @@ app/src/desktopTest/       тесты криптографии, транспор
 
 ## Сборка
 
-Требуются JDK 17, Android SDK 35 и сетевой доступ к Gradle/Maven. На Windows для упаковки EXE также нужен WiX 3.x в `PATH`.
+Требуются JDK 17 для Android и JDK 21 для Windows, Android SDK 35 и сетевой доступ к Gradle/Maven. На Windows для упаковки EXE также нужен WiX 3.x в `PATH`.
 
 ```bash
 ./gradlew :app:assembleDebug        # Android debug APK

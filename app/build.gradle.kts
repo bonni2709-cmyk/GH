@@ -14,7 +14,8 @@ kotlin {
         compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
     }
     jvm("desktop") {
-        compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
+        // Lazysodium's desktop release is compiled for Java 21.
+        compilerOptions { jvmTarget.set(JvmTarget.JVM_21) }
     }
     sourceSets {
         commonMain.dependencies {

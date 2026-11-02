@@ -23,11 +23,13 @@ jobs:
           - name: Android APK
             os: ubuntu-latest
             target: android
+            java: '17'
             artifact: Vale-Android-APK
             path: app/build/outputs/apk/debug/*.apk
           - name: Windows EXE
             os: windows-2022
             target: windows
+            java: '21'
             artifact: Vale-Windows-EXE
             path: app/build/compose/binaries/main/exe/*.exe
     runs-on: ${{ matrix.os }}
@@ -37,7 +39,7 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: ${{ matrix.java }}
       - uses: android-actions/setup-android@v4
       - uses: gradle/actions/setup-gradle@v5
       - name: Add WiX to PATH (Windows)
@@ -65,7 +67,7 @@ jobs:
         shell: bash
         run: |
           if [ -f "$RUNNER_TEMP/vale-build.log" ]; then
-            grep -E '(^e:|^\* What went wrong|^> |^Caused by:| FAILED|[Ee]rror:|Unresolved reference|Could not|Cannot|Exception:)' "$RUNNER_TEMP/vale-build.log" | head -60 | while IFS= read -r line; do
+            sed -r 's/\x1B\[[0-9;]*[mK]//g' "$RUNNER_TEMP/vale-build.log" | grep -E '(^e:|^\* What went wrong|^> (Could not|Execution failed|Compilation error)|^Caused by:| FAILED|[Ee]rror:|Unresolved reference|only compatible|Could not|Cannot)' | head -9 | while IFS= read -r line; do
               line=${line//'%'/'%25'}
               line=${line//$'\r'/}
               echo "::error::$line"
