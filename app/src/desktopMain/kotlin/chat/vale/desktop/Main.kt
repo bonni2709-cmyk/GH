@@ -27,6 +27,8 @@ import com.google.zxing.common.HybridBinarizer
 import com.goterl.lazysodium.LazySodiumJava
 import com.goterl.lazysodium.SodiumJava
 import java.awt.Toolkit
+import java.awt.Desktop
+import java.net.URI
 import java.awt.datatransfer.StringSelection
 import java.nio.file.Files
 import javax.swing.SwingUtilities
@@ -64,7 +66,10 @@ fun main(args: Array<String>) {
                 SwingUtilities.invokeLater { onResult(found) }
             }, "vale-qr-scanner").apply { isDaemon = true; start() }
         }
-        override fun clearCache() { /* The desktop app does not keep an application media cache. */ }
+        override fun openLocalPage(url: String): Boolean = try {
+            if (!Desktop.isDesktopSupported()) false else { Desktop.getDesktop().browse(URI(url)); true }
+        } catch (_: Exception) { false }
+        override fun clearCache() { /* Media is served from memory, not an application media cache. */ }
         override fun setDisguised(enabled: Boolean) { /* Windows shortcut icons are not changed. */ }
     } }
     val engine = remember { Engine(LazySodiumJava(SodiumJava()), bridge, { DesktopVault() }) }

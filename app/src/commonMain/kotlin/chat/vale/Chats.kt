@@ -1,10 +1,12 @@
 package chat.vale
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -18,6 +20,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Send
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.AttachFile
+import androidx.compose.material.icons.outlined.Call
+import androidx.compose.material.icons.outlined.Videocam
+import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.EmojiEmotions
 import androidx.compose.material.icons.outlined.Lock
@@ -177,10 +183,22 @@ private fun Conversation(controller: ValeController, state: ValeState, contact: 
                 Text(if (contact.address.isBlank()) "Адрес не указан" else "Локальное соединение", fontSize = 11.sp, color = Muted)
             }
             if (wide) StatusPill(if (state.networkAvailable) "ЛОКАЛЬНАЯ СЕТЬ" else "СЕТЬ НЕДОСТУПНА", state.networkAvailable)
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(4.dp))
+            IconButton(onClick = { controller.startCall(false) }, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Outlined.Call, "Голосовой звонок", tint = Sage, modifier = Modifier.size(20.dp))
+            }
+            IconButton(onClick = { controller.startCall(true) }, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.Outlined.Videocam, "Видеозвонок", tint = Sage, modifier = Modifier.size(21.dp))
+            }
             RoundIconButton(Icons.Outlined.Edit, "Изменить контакт", onEdit)
         }
         Box(Modifier.height(1.dp).fillMaxWidth().background(Line))
+        state.call?.takeIf { it.contactId == contact.id && !it.incoming }?.let { active ->
+            Row(Modifier.fillMaxWidth().background(Mist).padding(horizontal = 18.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(active.status, color = Forest, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                TextButton(onClick = controller::endCall) { Text("Завершить", color = Forest, fontSize = 12.sp) }
+            }
+        }
         if (messages.isEmpty()) {
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Column(Modifier.padding(30.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -200,15 +218,28 @@ private fun Conversation(controller: ValeController, state: ValeState, contact: 
         }
         Column(Modifier.fillMaxWidth().background(Paper).padding(horizontal = if (wide) 28.dp else 14.dp, vertical = 14.dp)) {
             if (emojiOpen) {
-                Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    listOf("🙂", "😊", "🤍", "👍", "✨", "🌿", "❤️", "🎉").forEach { emoji ->
-                        Text(emoji, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { text += emoji; emojiOpen = false }.padding(5.dp), fontSize = 20.sp)
+                Column(Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+                    Text("ЭМОДЗИ", color = Sage, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        items(listOf("🙂", "😊", "🤍", "👍", "✨", "🌿", "❤️", "🎉")) { emoji ->
+                            Text(emoji, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { text += emoji; emojiOpen = false }.padding(5.dp), fontSize = 20.sp)
+                        }
+                    }
+                    Spacer(Modifier.height(5.dp))
+                    Text("СТИКЕРЫ", color = Sage, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        items(listOf("🐻", "🦊", "🐈", "🐼", "🌷", "☕", "💌", "🌙")) { sticker ->
+                            Text(sticker, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { controller.sendSticker(sticker); emojiOpen = false }.padding(5.dp), fontSize = 25.sp)
+                        }
                     }
                 }
             }
             Row(Modifier.fillMaxWidth().background(CanvasColor, RoundedCornerShape(15.dp)).padding(start = 6.dp, end = 7.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = { emojiOpen = !emojiOpen }, modifier = Modifier.size(40.dp)) {
                     Icon(Icons.Outlined.EmojiEmotions, "Эмодзи", tint = Muted, modifier = Modifier.size(21.dp))
+                }
+                IconButton(onClick = controller::openMediaStudio, modifier = Modifier.size(36.dp)) {
+                    Icon(Icons.Outlined.AttachFile, "Голосовое, видео или стикер", tint = Muted, modifier = Modifier.size(20.dp))
                 }
                 BasicTextField(value = text, onValueChange = { if (it.length <= 4000) text = it }, modifier = Modifier.weight(1f).padding(horizontal = 5.dp),
                     textStyle = androidx.compose.ui.text.TextStyle(color = Ink, fontSize = 14.sp, lineHeight = 20.sp),
@@ -238,7 +269,24 @@ private fun MessageBubble(message: MessageView, controller: ValeController) {
             Modifier.widthIn(max = 450.dp).fillMaxWidth(.82f).clip(RoundedCornerShape(topStart = 17.dp, topEnd = 17.dp, bottomStart = if (message.outgoing) 17.dp else 5.dp, bottomEnd = if (message.outgoing) 5.dp else 17.dp))
                 .background(if (message.outgoing) Forest else Paper).padding(horizontal = 15.dp, vertical = 11.dp),
         ) {
-            Text(message.text, color = if (message.outgoing) Color.White else Ink, fontSize = 14.sp, lineHeight = 21.sp)
+            val textColor = if (message.outgoing) Color.White else Ink
+            when (message.kind) {
+                "sticker-emoji" -> Text(message.text, fontSize = 48.sp, lineHeight = 56.sp)
+                "sticker" -> {
+                    val image = remember(message.id) { controller.mediaBytes(message.id)?.let(::decodeSticker) }
+                    if (image != null) Image(image, "Стикер", Modifier.size(145.dp).clip(RoundedCornerShape(12.dp)).clickable { controller.openMedia(message.id) })
+                    else TextButton(onClick = { controller.openMedia(message.id) }) { Text("Открыть стикер", color = textColor) }
+                }
+                "audio", "video" -> Row(Modifier.clip(RoundedCornerShape(10.dp)).clickable { controller.openMedia(message.id) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(38.dp).background(if (message.outgoing) Color.White.copy(alpha = .18f) else Mist, CircleShape), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Outlined.PlayArrow, "Воспроизвести", tint = textColor)
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Column { Text(message.text, color = textColor, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        Text("${message.durationMs / 1000} сек · открыть", color = if (message.outgoing) Color.White.copy(alpha = .7f) else Muted, fontSize = 11.sp) }
+                }
+                else -> Text(message.text, color = textColor, fontSize = 14.sp, lineHeight = 21.sp)
+            }
             Spacer(Modifier.height(6.dp))
             Row(Modifier.align(Alignment.End), verticalAlignment = Alignment.CenterVertically) {
                 if (message.expiresAt != 0L) {

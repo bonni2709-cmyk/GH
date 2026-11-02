@@ -4,6 +4,8 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.WindowManager
@@ -39,6 +41,10 @@ class MainActivity : ComponentActivity() {
                 scanner.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE)
                     .setPrompt("Наведите камеру на QR-код контакта").setBeepEnabled(false).setOrientationLocked(false))
             }
+            override fun openLocalPage(url: String): Boolean = try {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                true
+            } catch (_: Exception) { false }
             override fun clearCache() { cacheDir.deleteRecursively(); cacheDir.mkdirs() }
             override fun setDisguised(enabled: Boolean) {
                 val pm = packageManager

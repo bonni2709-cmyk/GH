@@ -21,6 +21,10 @@ internal data class Message(
     val expiresAt: Long,
     // A pending encrypted packet remains in the encrypted database until acknowledged.
     val pendingPacket: String? = null,
+    val kind: String = "text",
+    val media: String = "",
+    val mime: String = "",
+    val durationMs: Long = 0,
 )
 
 @Serializable
@@ -33,6 +37,7 @@ internal data class Vault(
     val expirySeconds: Long = 0,
     val relayEnabled: Boolean = false,
     val panicMode: Boolean = false,
+    val controls: List<PendingControl> = emptyList(),
 )
 
 @Serializable
@@ -60,4 +65,32 @@ interface PlatformBridge {
     fun scanQr(onResult: (String?) -> Unit)
     fun clearCache()
     fun setDisguised(enabled: Boolean)
+    /** Opens only a user-initiated loopback media page in the system browser. */
+    fun openLocalPage(url: String): Boolean = false
 }
+
+/** Encrypted application body; wire headers still contain only routing metadata. */
+@Serializable
+internal data class Content(
+    val kind: String,
+    val text: String = "",
+    val media: String = "",
+    val mime: String = "",
+    val durationMs: Long = 0,
+    val callId: String = "",
+    val sdp: String = "",
+    val video: Boolean = false,
+)
+
+@Serializable
+internal data class PendingControl(
+    val id: String,
+    val contactId: String,
+    val packet: String,
+    val createdAt: Long,
+    val expiresAt: Long,
+)
+
+internal const val CONTENT_PREFIX = "VALE-CONTENT-2:"
+internal const val MAX_MEDIA_BYTES = 768_000
+internal const val MAX_MEDIA_TOTAL_BYTES = 40_000_000

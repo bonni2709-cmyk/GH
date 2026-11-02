@@ -6,7 +6,7 @@ import java.util.Base64
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
-private const val MAX_MESSAGE_BYTES = 16_384
+internal const val MAX_MESSAGE_BYTES = 1_100_000
 private const val WEEK_MS = 7L * 24 * 60 * 60 * 1000
 private const val CLOCK_SKEW_MS = 5L * 60 * 1000
 

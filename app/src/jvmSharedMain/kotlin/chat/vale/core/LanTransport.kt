@@ -15,7 +15,7 @@ import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
 internal const val DEFAULT_PORT = 45454
-private const val MAX_PACKET_SIZE = 32 * 1024
+internal const val MAX_PACKET_SIZE = 1_600_000
 
 /** Direct, bounded TCP transport. It deliberately accepts only literal private IPv4 addresses. */
 internal class LanTransport(

@@ -11,11 +11,20 @@ data class MessageView(
     val createdAt: Long,
     val expiresAt: Long,
     val pending: Boolean,
+    val kind: String = "text",
+    val durationMs: Long = 0,
 )
 
 data class QrGrid(val size: Int, val cells: BooleanArray) {
     operator fun get(x: Int, y: Int): Boolean = cells[y * size + x]
 }
+
+data class CallView(
+    val contactId: String,
+    val incoming: Boolean,
+    val video: Boolean,
+    val status: String,
+)
 
 data class ValeState(
     val loading: Boolean = true,
@@ -30,6 +39,7 @@ data class ValeState(
     val relayEnabled: Boolean = false,
     val networkAvailable: Boolean = false,
     val panic: Boolean = false,
+    val call: CallView? = null,
     val error: String? = null,
 )
 
@@ -42,6 +52,14 @@ interface ValeController {
     fun removeContact(id: String)
     fun selectContact(id: String?)
     fun sendMessage(text: String)
+    fun sendSticker(emoji: String)
+    fun openMediaStudio()
+    fun openMedia(messageId: String)
+    fun mediaBytes(messageId: String): ByteArray?
+    fun startCall(video: Boolean)
+    fun acceptCall()
+    fun declineCall()
+    fun endCall()
     fun setExpiry(seconds: Long)
     fun setRelay(enabled: Boolean)
     fun copyText(value: String)

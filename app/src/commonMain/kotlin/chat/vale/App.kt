@@ -41,6 +41,17 @@ fun ValeApp(controller: ValeController) {
                 state.profileName == null -> OnboardingScreen(controller)
                 else -> Workspace(controller, state)
             }
+            state.call?.takeIf { it.incoming && !state.panic }?.let { incoming ->
+                val name = state.contacts.firstOrNull { it.id == incoming.contactId }?.name ?: "Контакт"
+                AlertDialog(
+                    onDismissRequest = controller::declineCall,
+                    title = { Text(if (incoming.video) "Видеозвонок" else "Голосовой звонок", fontWeight = FontWeight.SemiBold) },
+                    text = { Text("$name звонит вам. Звонок откроется в браузере и соединится напрямую, раскрывая сетевые адреса собеседнику.") },
+                    confirmButton = { Button(onClick = controller::acceptCall) { Text("Ответить") } },
+                    dismissButton = { TextButton(onClick = controller::declineCall) { Text("Отклонить") } },
+                    containerColor = Paper,
+                )
+            }
             state.error?.let { message ->
                 AlertDialog(
                     onDismissRequest = controller::dismissError,
