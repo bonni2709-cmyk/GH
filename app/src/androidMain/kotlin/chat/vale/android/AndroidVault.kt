@@ -53,7 +53,10 @@ internal class AndroidVault(context: Context) : EncryptedStore {
         }
         System.loadLibrary("sqlcipher")
         db = SQLiteDatabase.openOrCreateDatabase(file, password, null, null, null)
-        db.execSQL("PRAGMA secure_delete = ON")
+        // This pragma returns a row; execSQL rejects row-producing statements on Android.
+        db.rawQuery("PRAGMA secure_delete = ON", emptyArray<String>()).use {
+            check(it.moveToFirst() && it.getInt(0) == 1) { "Could not enable secure deletion" }
+        }
         db.execSQL("CREATE TABLE IF NOT EXISTS vault_state (id INTEGER PRIMARY KEY CHECK(id = 1), data TEXT NOT NULL)")
     }
 

@@ -70,7 +70,9 @@ class Engine(
                         retryPending()
                     }
                 }
-            } catch (_: Exception) {
+            } catch (e: Exception) {
+                // Do not log exception messages, which may contain private data or file paths.
+                System.err.println("VALE: storage startup failed (${e.javaClass.simpleName})")
                 mutable.update { it.copy(loading = false, fatalError = "Не удалось открыть защищённое хранилище. Проверьте доступ к профилю устройства; данные не были сброшены.") }
             }
         }

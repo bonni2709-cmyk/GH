@@ -36,7 +36,7 @@ mode = sys.argv[2]
 for node in root.iter('node'):
     a = node.attrib
     match = (mode == 'edit' and a.get('class', '').endswith('EditText')) or (
-        mode == 'create' and 'Создать профиль' in a.get('text', ''))
+        mode == 'create' and 'Создать профиль' in (a.get('text', '') + a.get('content-desc', '')))
     if match:
         bounds = re.findall(r'\d+', a.get('bounds', ''))
         if len(bounds) == 4:
@@ -47,8 +47,21 @@ sys.exit(1)
 PY
 }
 
-snapshot
-position=$(coordinates edit) || { echo 'Profile name field not found' >&2; cat "$RUNNER_TEMP/vale-window.xml"; exit 1; }
+# Scroll the onboarding form into view on small emulator screens and wait for it.
+adb shell input swipe 160 540 160 220 350
+position=''
+for _ in {1..15}; do
+    snapshot
+    if position=$(coordinates edit); then break; fi
+    if grep -q 'Хранилище недоступно' "$RUNNER_TEMP/vale-window.xml"; then break; fi
+    sleep 2
+done
+if [[ -z "$position" ]]; then
+    echo 'Profile name field not found' >&2
+    cat "$RUNNER_TEMP/vale-window.xml"
+    adb logcat -d -s System.err:W | tail -100 || true
+    exit 1
+fi
 adb shell input tap $position
 adb shell input text Alice
 adb shell input keyevent KEYCODE_BACK
@@ -69,4 +82,20 @@ if [[ $created != 1 ]]; then
     exit 1
 fi
 adb shell pidof chat.vale.app >/dev/null
-echo 'Android APK launched, initialized encrypted storage and created a profile.'
+# A cold restart must unwrap the same key and restore the generated identity.
+adb shell am force-stop chat.vale.app
+adb shell am start -W -n chat.vale.app/chat.vale.android.MainActivity
+restored=0
+for _ in {1..20}; do
+    sleep 2
+    snapshot
+    if grep -q 'Чаты' "$RUNNER_TEMP/vale-window.xml"; then restored=1; break; fi
+    if grep -q 'Хранилище недоступно' "$RUNNER_TEMP/vale-window.xml"; then break; fi
+done
+if [[ $restored != 1 ]]; then
+    echo 'Profile was not restored after restart' >&2
+    cat "$RUNNER_TEMP/vale-window.xml"
+    adb logcat -d -s System.err:W | tail -100 || true
+    exit 1
+fi
+echo 'Android APK initialized encrypted storage, created a profile and restored it after restart.'

@@ -95,6 +95,9 @@ private fun runtimeSelfTest() {
         val vault = DesktopVault(directory)
         try { vault.write("runtime check"); check(vault.read() == "runtime check") }
         finally { vault.close() }
+        val reopened = DesktopVault(directory)
+        try { check(reopened.read() == "runtime check") }
+        finally { reopened.close() }
         check(!String(directory.resolve("vale.db").readBytes(), Charsets.ISO_8859_1).contains("runtime check"))
     } finally { directory.deleteRecursively() }
 }
