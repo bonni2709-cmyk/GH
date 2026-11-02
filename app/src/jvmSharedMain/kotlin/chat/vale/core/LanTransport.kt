@@ -21,7 +21,7 @@ internal const val MAX_PACKET_SIZE = 1_600_000
 internal class LanTransport(
     private val port: Int = DEFAULT_PORT,
     private val loopbackOnly: Boolean = false,
-    private val onPacket: (String, Int) -> Boolean,
+    private val onPacket: (String, Int) -> String?,
 ) {
     private var server: ServerSocket? = null
     private val workers = ThreadPoolExecutor(2, 6, 30, TimeUnit.SECONDS, ArrayBlockingQueue(24))
@@ -61,8 +61,11 @@ internal class LanTransport(
                 if (hops !in 0..3) return
                 val bytes = ByteArray(length)
                 input.readFully(bytes)
-                val accepted = onPacket(String(bytes, Charsets.UTF_8), hops)
-                DataOutputStream(it.getOutputStream()).apply { writeBoolean(accepted); flush() }
+                val receipt = onPacket(String(bytes, Charsets.UTF_8), hops)?.toByteArray(Charsets.US_ASCII)
+                DataOutputStream(it.getOutputStream()).apply {
+                    if (receipt == null || receipt.size !in 1..128) writeShort(0) else { writeShort(receipt.size); write(receipt) }
+                    flush()
+                }
             }
         } catch (_: Exception) {
             // Untrusted or disconnected peers must never crash the app.
@@ -77,10 +80,12 @@ internal class LanTransport(
     companion object {
         fun validEndpoint(value: String): Boolean = parseEndpoint(value) != null
 
-        fun send(address: String, packet: String, hops: Int = 3): Boolean {
-            val endpoint = parseEndpoint(address) ?: return false
+        fun send(address: String, packet: String, hops: Int = 3): Boolean = sendReceipt(address, packet, hops) != null
+
+        fun sendReceipt(address: String, packet: String, hops: Int = 3): String? {
+            val endpoint = parseEndpoint(address) ?: return null
             val bytes = packet.toByteArray(Charsets.UTF_8)
-            if (bytes.size !in 1..MAX_PACKET_SIZE || hops !in 0..3) return false
+            if (bytes.size !in 1..MAX_PACKET_SIZE || hops !in 0..3) return null
             return try {
                 Socket().use { socket ->
                     socket.connect(endpoint, 2_000)
@@ -88,9 +93,13 @@ internal class LanTransport(
                     DataOutputStream(socket.getOutputStream()).apply {
                         writeInt(bytes.size); writeByte(hops); write(bytes); flush()
                     }
-                    DataInputStream(socket.getInputStream()).readBoolean()
+                    val input = DataInputStream(socket.getInputStream())
+                    val size = input.readUnsignedShort()
+                    if (size !in 1..128) return null
+                    val response = ByteArray(size); input.readFully(response)
+                    String(response, Charsets.US_ASCII)
                 }
-            } catch (_: Exception) { false }
+            } catch (_: Exception) { null }
         }
 
         fun localAddress(): String = try {

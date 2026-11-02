@@ -33,16 +33,24 @@ coordinates() {
 import re, sys, xml.etree.ElementTree as ET
 root = ET.parse(sys.argv[1]).getroot()
 mode = sys.argv[2]
+matches = []
 for node in root.iter('node'):
     a = node.attrib
+    text, desc = a.get('text', ''), a.get('content-desc', '')
     match = (mode == 'edit' and a.get('class', '').endswith('EditText')) or (
-        mode == 'create' and 'Создать профиль' in (a.get('text', '') + a.get('content-desc', '')))
+        mode == 'create' and 'Создать профиль' in (text + desc)) or (
+        mode == 'settings' and (text == 'Настройки' or desc == 'Настройки')) or (
+        mode == 'tor-switch' and 'Режим Tor' in desc)
     if match:
         bounds = re.findall(r'\d+', a.get('bounds', ''))
         if len(bounds) == 4:
             x1, y1, x2, y2 = map(int, bounds)
-            print((x1 + x2) // 2, (y1 + y2) // 2)
-            sys.exit(0)
+            if x2 > x1 and y2 > y1: matches.append(((x1 + x2) // 2, (y1 + y2) // 2))
+if matches:
+    # Navigation appears at the bottom; do not mistake the settings page heading for it.
+    x, y = max(matches, key=lambda p: p[1]) if mode == 'settings' else matches[0]
+    print(x, y)
+    sys.exit(0)
 sys.exit(1)
 PY
 }
@@ -99,3 +107,33 @@ if [[ $restored != 1 ]]; then
     exit 1
 fi
 echo 'Android APK initialized encrypted storage, created a profile and restored it after restart.'
+
+# Enable Tor via the real UI and verify that the bundled Android JNI starts a v3 service.
+snapshot
+position=$(coordinates settings) || { echo 'Settings tab not found' >&2; cat "$RUNNER_TEMP/vale-window.xml"; exit 1; }
+adb shell input tap $position
+position=''
+for _ in {1..6}; do
+    sleep 1
+    snapshot
+    if position=$(coordinates tor-switch); then break; fi
+    adb shell input swipe 160 600 160 250 350
+done
+if [[ -z "$position" ]]; then
+    echo 'Tor switch not found' >&2
+    cat "$RUNNER_TEMP/vale-window.xml"
+    exit 1
+fi
+adb shell input tap $position
+onion=0
+for _ in {1..30}; do
+    if adb shell run-as chat.vale.app cat no_backup/tor/onion/hostname 2>/dev/null | grep -Eq '^[a-z2-7]{56}\.onion'; then onion=1; break; fi
+    sleep 2
+done
+if [[ $onion != 1 ]]; then
+    echo 'Android Tor did not initialize its onion service' >&2
+    snapshot; cat "$RUNNER_TEMP/vale-window.xml"
+    adb logcat -d -s TorService:D AndroidRuntime:E System.err:W libc:E | tail -160 || true
+    exit 1
+fi
+echo 'Android Tor native service generated an onion address.'

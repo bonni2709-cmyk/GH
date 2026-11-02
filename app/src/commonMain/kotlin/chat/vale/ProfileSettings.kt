@@ -19,6 +19,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -99,7 +101,7 @@ internal fun SettingsScreen(controller: ValeController, state: ValeState) {
                         Text("Передача только через собственный onion-сервис. Локальная сеть и Nearby отключаются; прямые WebRTC-звонки недоступны. ${state.torStatus}.", color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
                     }
                     Spacer(Modifier.width(12.dp))
-                    Switch(checked = state.torEnabled, onCheckedChange = controller::setTor)
+                    Switch(checked = state.torEnabled, onCheckedChange = controller::setTor, modifier = Modifier.semantics { contentDescription = "Режим Tor" })
                 }
                 Spacer(Modifier.height(15.dp))
                 HorizontalDivider(color = Line)
@@ -111,7 +113,7 @@ internal fun SettingsScreen(controller: ValeController, state: ValeState) {
                         Text("Только для контактов, добавленных на этом устройстве. Ретранслятор видит ID и сетевые метаданные, но не текст.", color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
                     }
                     Spacer(Modifier.width(12.dp))
-                    Switch(checked = state.relayEnabled, onCheckedChange = controller::setRelay)
+                    Switch(checked = state.relayEnabled, onCheckedChange = controller::setRelay, modifier = Modifier.semantics { contentDescription = "Ретрансляция" })
                 }
                 Spacer(Modifier.height(15.dp))
                 HorizontalDivider(color = Line)
@@ -124,7 +126,7 @@ internal fun SettingsScreen(controller: ValeController, state: ValeState) {
                             Text("Android Nearby использует Bluetooth и Wi‑Fi для связи без общей сети. Нужны разрешения и Google Play services. ${state.nearbyStatus}.", color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
                         }
                         Spacer(Modifier.width(12.dp))
-                        Switch(checked = state.nearbyEnabled, onCheckedChange = controller::setNearby, enabled = !state.torEnabled)
+                        Switch(checked = state.nearbyEnabled, onCheckedChange = controller::setNearby, enabled = !state.torEnabled, modifier = Modifier.semantics { contentDescription = "Связь поблизости" })
                     }
                     Spacer(Modifier.height(15.dp))
                     HorizontalDivider(color = Line)

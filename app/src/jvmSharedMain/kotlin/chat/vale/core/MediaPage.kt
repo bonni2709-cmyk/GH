@@ -24,7 +24,7 @@ audio{width:100%;margin:15px 0}video.remote{max-height:60vh}.row{display:flex;ga
 <p class="small note">До 60 секунд аудио или 15 секунд видео, не более 768 КБ. H.264 доступен не во всех браузерах и на не всех устройствах.</p></section>
 <section class="card" id="play" hidden><span class="badge">ПРОСМОТР</span><audio id="audioPlayer" controls hidden></audio><video id="videoPlayer" class="preview" controls playsinline hidden></video><img id="stickerPlayer" class="preview" alt="Стикер" hidden></section>
 <section class="card" id="call" hidden><span class="badge">WEBRTC · НАПРЯМУЮ</span><p style="margin-top:15px">Звонок устанавливается напрямую между устройствами без STUN/TURN-сервера. Собеседник увидит ваши сетевые адреса; Tor для звонков не используется.</p>
-<div class="row"><video id="remoteVideo" class="preview remote" autoplay playsinline hidden></video><video id="localVideo" class="preview" autoplay muted playsinline hidden style="width:100px;height:100px"></video></div><audio id="remoteAudio" autoplay></audio>
+<div class="row"><video id="remoteVideo" class="preview remote" autoplay muted playsinline hidden></video><video id="localVideo" class="preview" autoplay muted playsinline hidden style="width:100px;height:100px"></video></div><audio id="remoteAudio" autoplay></audio>
 <div class="actions"><button id="beginCall">Разрешить и подключиться</button><button id="hangup" class="secondary">Завершить</button></div></section>
 <div id="status" class="status" role="status"></div><p class="small">Страница работает только на вашем устройстве и закроется вместе с Vale.</p>
 </main><script>

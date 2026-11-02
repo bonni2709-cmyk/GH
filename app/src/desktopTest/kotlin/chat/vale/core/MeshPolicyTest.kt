@@ -19,7 +19,7 @@ class MeshPolicyTest {
         override fun close() = Unit
     }
     private class Mesh {
-        val receivers = ConcurrentHashMap<String, (String, Int) -> Boolean>()
+        val receivers = ConcurrentHashMap<String, (String, Int) -> String?>()
         val links = ConcurrentHashMap<String, List<String>>()
         fun bridge(name: String) = object : PlatformBridge {
             override val mobile = true
@@ -27,12 +27,11 @@ class MeshPolicyTest {
             override fun scanQr(onResult: (String?) -> Unit) = onResult(null)
             override fun clearCache() = Unit
             override fun setDisguised(enabled: Boolean) = Unit
-            override fun requestNearbyPermission(onResult: (Boolean) -> Unit) = onResult(true)
-            override fun startNearby(onPacket: (String, Int) -> Boolean, onStatus: (Int, String) -> Unit): NearbyLink {
+            override fun startNearby(onPacket: (String, Int) -> String?, onStatus: (Int, String) -> Unit): NearbyLink {
                 receivers[name] = onPacket
                 onStatus(links[name]?.size ?: 0, "тест")
                 return object : NearbyLink {
-                    override fun send(packet: String, hops: Int) = links[name].orEmpty().any { receivers[it]?.invoke(packet, hops) == true }
+                    override fun send(packet: String, hops: Int) = links[name].orEmpty().firstNotNullOfOrNull { receivers[it]?.invoke(packet, hops) }
                     override fun close() { receivers.remove(name) }
                 }
             }
@@ -69,6 +68,23 @@ class MeshPolicyTest {
             waitFor { a.state.value.messages.any { !it.pending } }
             assertTrue(b.state.value.messages.isEmpty()) // relay never decrypts or displays plaintext
         } finally { a.close(); b.close(); c.close() }
+    }
+
+    @Test fun forgedRelayReceiptDoesNotMarkMessageDelivered() = runBlocking {
+        val mesh = Mesh().apply { links["a"] = listOf("evil"); receivers["evil"] = { _, _ -> "A".repeat(86) } }
+        val a = Engine(LazySodiumJava(SodiumJava()), mesh.bridge("a"), { MemoryStore() }, freePorts(1).single())
+        try {
+            waitFor { !a.state.value.loading }
+            a.createProfile("Alice")
+            waitFor { a.state.value.networkAvailable }
+            val target = Crypto(LazySodiumJava(SodiumJava())).generateIdentity("Bob").publicKey
+            a.addContact("Bob", target, ""); a.setNearby(true)
+            waitFor { a.state.value.contacts.size == 1 && a.state.value.nearbyEnabled && mesh.receivers.containsKey("a") }
+            a.selectContact(target); a.sendMessage("prove receipt")
+            waitFor { a.state.value.messages.isNotEmpty() }
+            delay(1_000)
+            assertTrue(a.state.value.messages.single().pending)
+        } finally { a.close() }
     }
 
     @Test fun torOnlyRejectsLocalEndpointsAndDirectCalls() = runBlocking {

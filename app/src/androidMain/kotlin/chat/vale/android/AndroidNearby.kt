@@ -31,13 +31,13 @@ import java.util.concurrent.TimeUnit
 @SuppressLint("MissingPermission")
 internal class AndroidNearby(
     context: Context,
-    private val onPacket: (String, Int) -> Boolean,
+    private val onPacket: (String, Int) -> String?,
     private val onStatus: (Int, String) -> Unit,
 ) : NearbyLink {
     private val client = Nearby.getConnectionsClient(context.applicationContext)
     private val peers = ConcurrentHashMap.newKeySet<String>()
     private val requesting = ConcurrentHashMap.newKeySet<String>()
-    private val awaiting = ConcurrentHashMap<String, CompletableFuture<Boolean>>()
+    private val awaiting = ConcurrentHashMap<String, CompletableFuture<String?>>()
     private val assemblies = HashMap<String, Assembly>()
     private val pool = ThreadPoolExecutor(2, 10, 30, TimeUnit.SECONDS, ArrayBlockingQueue(64)) { task ->
         Thread(task, "vale-nearby").apply { isDaemon = true }
@@ -97,7 +97,10 @@ internal class AndroidNearby(
             if (!bytes.copyOfRange(0, 4).contentEquals(MAGIC)) return
             val id = encodeId(bytes.copyOfRange(5, 21))
             if (bytes[4].toInt() == ACK) {
-                if (bytes.size == 22 && bytes[21].toInt() == 1) awaiting[id]?.complete(true)
+                if (bytes.size in 23..150 && bytes[21].toInt() == 1) {
+                    val receipt = String(bytes, 22, bytes.size - 22, Charsets.US_ASCII)
+                    awaiting[id]?.complete(receipt)
+                }
                 return
             }
             if (bytes[4].toInt() != DATA || bytes.size < HEADER) return
@@ -133,8 +136,8 @@ internal class AndroidNearby(
             complete?.let { body ->
                 try {
                     pool.execute {
-                        val accepted = try { onPacket(String(body, Charsets.UTF_8), hops) } catch (_: Exception) { false }
-                        if (!closed) sendAck(endpointId, bytes.copyOfRange(5, 21), accepted)
+                        val receipt = try { onPacket(String(body, Charsets.UTF_8), hops) } catch (_: Exception) { null }
+                        if (!closed) sendAck(endpointId, bytes.copyOfRange(5, 21), receipt)
                     }
                 } catch (_: Exception) { }
             }
@@ -142,25 +145,27 @@ internal class AndroidNearby(
         override fun onPayloadTransferUpdate(endpointId: String, update: PayloadTransferUpdate) { }
     }
 
-    private fun sendAck(endpoint: String, id: ByteArray, accepted: Boolean) {
-        val frame = ByteBuffer.allocate(22).put(MAGIC).put(ACK.toByte()).put(id).put(if (accepted) 1.toByte() else 0.toByte()).array()
+    private fun sendAck(endpoint: String, id: ByteArray, receipt: String?) {
+        val proof = receipt?.toByteArray(Charsets.US_ASCII)?.takeIf { it.size in 1..128 }
+        val frame = ByteBuffer.allocate(22 + (proof?.size ?: 0)).put(MAGIC).put(ACK.toByte()).put(id)
+            .put(if (proof != null) 1.toByte() else 0.toByte()).apply { if (proof != null) put(proof) }.array()
         try { client.sendPayload(endpoint, Payload.fromBytes(frame)) } catch (_: Exception) { }
     }
 
-    override fun send(packet: String, hops: Int): Boolean {
-        if (closed || hops !in 0..3) return false
+    override fun send(packet: String, hops: Int): String? {
+        if (closed || hops !in 0..3) return null
         val destinations = peers.toList().take(MAX_PEERS)
         val body = packet.toByteArray(Charsets.UTF_8)
-        if (destinations.isEmpty() || body.size !in 1..MAX_PACKET_SIZE) return false
+        if (destinations.isEmpty() || body.size !in 1..MAX_PACKET_SIZE) return null
         val requestId = ByteArray(16).also { SecureRandom().nextBytes(it) }
         val key = encodeId(requestId)
-        val future = CompletableFuture<Boolean>()
+        val future = CompletableFuture<String?>()
         awaiting[key] = future
         return try {
             val total = (body.size + CHUNK - 1) / CHUNK
             for (endpoint in destinations) {
                 for (index in 0 until total) {
-                    if (closed) return false
+                    if (closed) return null
                     val start = index * CHUNK
                     val length = minOf(CHUNK, body.size - start)
                     val frame = ByteBuffer.allocate(HEADER + length).put(MAGIC).put(DATA.toByte()).put(requestId)
@@ -169,7 +174,7 @@ internal class AndroidNearby(
                 }
             }
             future.get(75, TimeUnit.SECONDS)
-        } catch (_: Exception) { false }
+        } catch (_: Exception) { null }
         finally { awaiting.remove(key) }
     }
 
@@ -179,7 +184,7 @@ internal class AndroidNearby(
         if (closed) return
         closed = true
         try { client.stopDiscovery(); client.stopAdvertising(); client.stopAllEndpoints() } catch (_: Exception) { }
-        awaiting.values.forEach { it.complete(false) }; awaiting.clear()
+        awaiting.values.forEach { it.complete(null) }; awaiting.clear()
         peers.clear(); requesting.clear(); synchronized(assemblies) { assemblies.clear() }
         pool.shutdownNow()
     }

@@ -30,7 +30,7 @@ class TorTransportTest {
                     output.write(byteArrayOf(5, 0, 0, 1, 127, 0, 0, 1, 0, 1)); output.flush()
                     val size = input.readInt(); assertEquals(3, input.readUnsignedByte())
                     val packet = ByteArray(size); input.readFully(packet)
-                    output.writeBoolean(true); output.flush()
+                    output.writeShort(5); output.write("proof".toByteArray()); output.flush()
                     String(hostname) + ":" + String(packet)
                 }
             }

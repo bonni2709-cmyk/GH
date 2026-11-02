@@ -62,7 +62,7 @@ interface EncryptedStore {
 }
 
 interface NearbyLink {
-    fun send(packet: String, hops: Int): Boolean
+    fun send(packet: String, hops: Int): String?
     fun close()
 }
 
@@ -76,7 +76,7 @@ interface PlatformBridge {
     fun setDisguised(enabled: Boolean)
     /** Opens only a user-initiated loopback media page in the system browser. */
     fun openLocalPage(url: String): Boolean = false
-    fun startNearby(onPacket: (String, Int) -> Boolean, onStatus: (Int, String) -> Unit): NearbyLink? = null
+    fun startNearby(onPacket: (String, Int) -> String?, onStatus: (Int, String) -> Unit): NearbyLink? = null
     fun startTor(localPort: Int, socksPort: Int, onStatus: (String, String) -> Unit): TorHandle? = null
 }
 

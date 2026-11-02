@@ -62,7 +62,7 @@ class MainActivity : ComponentActivity() {
                 scanner.launch(ScanOptions().setDesiredBarcodeFormats(ScanOptions.QR_CODE)
                     .setPrompt("Наведите камеру на QR-код контакта").setBeepEnabled(false).setOrientationLocked(false))
             }
-            override fun startNearby(onPacket: (String, Int) -> Boolean, onStatus: (Int, String) -> Unit): NearbyLink {
+            override fun startNearby(onPacket: (String, Int) -> String?, onStatus: (Int, String) -> Unit): NearbyLink {
                 val link = AndroidNearby(applicationContext, onPacket, onStatus)
                 nearby?.close()
                 nearby = link

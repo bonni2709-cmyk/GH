@@ -11,6 +11,14 @@ internal fun packagedTorExecutable(): File? {
     return resources.resolve("tor-bundle").walkTopDown().maxDepth(4).firstOrNull { it.isFile && it.name.equals("tor.exe", true) }
 }
 
+internal fun torConfiguration(data: File, onion: File, localPort: Int, socksPort: Int, offline: Boolean = false): String {
+    fun path(file: File): String = "\"" + file.absolutePath.replace('\\', '/').replace("\"", "") + "\""
+    val socks = if (socksPort == 0) "0" else "127.0.0.1:$socksPort"
+    return "SOCKSPort $socks\nClientOnly 1\n" + (if (offline) "DisableNetwork 1\n" else "") +
+        "DataDirectory ${path(data)}\nHiddenServiceDir ${path(onion)}\nHiddenServiceVersion 3\n" +
+        "HiddenServicePort 45454 127.0.0.1:$localPort\n"
+}
+
 /** Runs the pinned Tor Expert Bundle; Tor-only mode never falls back to LAN. */
 internal class DesktopTor(localPort: Int, socksPort: Int, private val onStatus: (String, String) -> Unit) : TorHandle {
     private val directory = File(System.getenv("LOCALAPPDATA") ?: error("LOCALAPPDATA unavailable"), "Vale/tor")
@@ -25,11 +33,8 @@ internal class DesktopTor(localPort: Int, socksPort: Int, private val onStatus: 
         val executable = packagedTorExecutable() ?: error("Tor binary is missing")
         check(onionDirectory.mkdirs() || onionDirectory.isDirectory)
         val data = directory.resolve("data").apply { mkdirs() }
-        fun path(file: File): String = "\"" + file.absolutePath.replace('\\', '/').replace("\"", "") + "\""
         val config = directory.resolve("torrc")
-        config.writeText("SOCKSPort 127.0.0.1:$socksPort\nClientOnly 1\nRunAsDaemon 0\n" +
-            "DataDirectory ${path(data)}\nHiddenServiceDir ${path(onionDirectory)}\nHiddenServiceVersion 3\n" +
-            "HiddenServicePort 45454 127.0.0.1:$localPort\n")
+        config.writeText(torConfiguration(data, onionDirectory, localPort, socksPort))
         process = ProcessBuilder(executable.absolutePath, "-f", config.absolutePath)
             .directory(executable.parentFile).redirectErrorStream(true).start()
         Thread({

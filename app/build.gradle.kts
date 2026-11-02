@@ -13,7 +13,10 @@ plugins {
 // Extract only the native libraries from the pinned AAR. TorService is built
 // from the corresponding Java sources with this project's JDK 17 toolchain.
 val torAndroidBinary by configurations.creating { isTransitive = false }
-dependencies { add(torAndroidBinary.name, "info.guardianproject:tor-android:0.4.9.14@aar") }
+dependencies {
+    add(torAndroidBinary.name, "info.guardianproject:tor-android:0.4.9.14@aar")
+    add("coreLibraryDesugaring", "com.android.tools:desugar_jdk_libs:2.1.5")
+}
 val unpackTorNative by tasks.registering(Copy::class) {
     from({ zipTree(torAndroidBinary.singleFile) }) {
         include("jni/**")
@@ -63,7 +66,7 @@ kotlin {
                 implementation("net.zetetic:sqlcipher-android:4.12.0@aar")
                 implementation("androidx.sqlite:sqlite:2.5.0")
                 implementation("com.journeyapps:zxing-android-embedded:4.3.0")
-                implementation("com.google.android.gms:play-services-nearby:19.5.0")
+                implementation("com.google.android.gms:play-services-nearby:19.3.0")
                 implementation("info.guardianproject:jtorctl:0.4.5.7")
                 implementation("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
             }
@@ -99,6 +102,7 @@ android {
         versionName = "0.1.0"
     }
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }

@@ -21,11 +21,13 @@ internal object TorTransport {
         return host to port
     }
 
-    fun send(endpoint: String, socksPort: Int, packet: String, hops: Int = 3): Boolean {
-        val (host, port) = parse(endpoint) ?: return false
-        if (socksPort !in 1..65535 || hops !in 0..3) return false
+    fun send(endpoint: String, socksPort: Int, packet: String, hops: Int = 3): Boolean = sendReceipt(endpoint, socksPort, packet, hops) != null
+
+    fun sendReceipt(endpoint: String, socksPort: Int, packet: String, hops: Int = 3): String? {
+        val (host, port) = parse(endpoint) ?: return null
+        if (socksPort !in 1..65535 || hops !in 0..3) return null
         val bytes = packet.toByteArray(Charsets.UTF_8)
-        if (bytes.size !in 1..MAX_PACKET_SIZE) return false
+        if (bytes.size !in 1..MAX_PACKET_SIZE) return null
         return try {
             Socket().use { socket ->
                 // Connect only to the local Tor proxy. Hostname is carried inside SOCKS5.
@@ -34,21 +36,24 @@ internal object TorTransport {
                 val input = DataInputStream(socket.getInputStream())
                 val output = DataOutputStream(socket.getOutputStream())
                 output.write(byteArrayOf(5, 1, 0)); output.flush()
-                if (input.readUnsignedByte() != 5 || input.readUnsignedByte() != 0) return false
+                if (input.readUnsignedByte() != 5 || input.readUnsignedByte() != 0) return null
                 val name = host.toByteArray(Charsets.US_ASCII)
                 output.write(byteArrayOf(5, 1, 0, 3, name.size.toByte())); output.write(name); output.writeShort(port); output.flush()
-                if (input.readUnsignedByte() != 5 || input.readUnsignedByte() != 0 || input.readUnsignedByte() != 0) return false
+                if (input.readUnsignedByte() != 5 || input.readUnsignedByte() != 0 || input.readUnsignedByte() != 0) return null
                 when (input.readUnsignedByte()) {
                     1 -> input.skipFully(4)
                     3 -> input.skipFully(input.readUnsignedByte())
                     4 -> input.skipFully(16)
-                    else -> return false
+                    else -> return null
                 }
                 input.readUnsignedShort()
                 output.writeInt(bytes.size); output.writeByte(hops); output.write(bytes); output.flush()
-                input.readBoolean()
+                val size = input.readUnsignedShort()
+                if (size !in 1..128) return null
+                val response = ByteArray(size); input.readFully(response)
+                String(response, Charsets.US_ASCII)
             }
-        } catch (_: Exception) { false }
+        } catch (_: Exception) { null }
     }
 
     private fun DataInputStream.skipFully(size: Int) { val ignored = ByteArray(size); readFully(ignored) }

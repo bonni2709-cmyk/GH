@@ -11,7 +11,7 @@ class TransportTest {
     @Test fun directFramingAndPrivateAddressRestriction() {
         val port = ServerSocket(0).use { it.localPort }
         val received = AtomicReference<String>()
-        val listener = LanTransport(port) { packet, hops -> received.set("$packet/$hops"); true }
+        val listener = LanTransport(port) { packet, hops -> received.set("$packet/$hops"); "ok" }
         assertTrue(listener.start())
         try {
             assertTrue(LanTransport.validEndpoint("192.168.1.5"))

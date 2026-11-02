@@ -59,7 +59,7 @@ class Engine(
     @Volatile private var networkTransition: Boolean = false
     @Volatile private var panicJob: Job? = null
     private val inFlight = ConcurrentHashMap.newKeySet<String>()
-    private val relayed = ConcurrentHashMap.newKeySet<String>()
+    private val relayed = ConcurrentHashMap<String, String>()
     private val browserLock = Any()
     @Volatile private var browser: MediaServer? = null
     @Volatile private var call: CallSession? = null
@@ -398,52 +398,55 @@ class Engine(
         if (transport != null) { if (vault.torEnabled) startTor() else startNearby() }
     }
 
-    private suspend fun receive(encoded: String, hops: Int): Boolean {
-        if (mutable.value.panic) return false
-        val packet = try { json.decodeFromString<Packet>(encoded) } catch (_: Exception) { return false }
+    private suspend fun receive(encoded: String, hops: Int): String? {
+        if (mutable.value.panic || networkTransition) return null
+        val packet = try { json.decodeFromString<Packet>(encoded) } catch (_: Exception) { return null }
         val now = System.currentTimeMillis()
-        if (!crypto.verify(packet, now)) return false
+        if (!crypto.verify(packet, now)) return null
         val snapshot = vault
-        val me = snapshot.identity ?: return false
+        val me = snapshot.identity ?: return null
+        val seenKey = packet.from + ":" + packet.id
+        val relayKey = seenKey + ":" + packet.to
         // A sender must be explicitly added before their packets are processed or relayed.
-        if (snapshot.contacts.none { it.id == packet.from }) return false
+        if (snapshot.contacts.none { it.id == packet.from }) return null
         if (packet.to == me.publicKey) {
-            if (snapshot.seen.containsKey(packet.id)) return true
-            val plaintext = crypto.open(me, packet, now) ?: return false
-            val content = decodeContent(plaintext) ?: return false
+            if (snapshot.seen.containsKey(seenKey)) return try { crypto.signReceipt(me, packet) } catch (_: Exception) { null }
+            val plaintext = crypto.open(me, packet, now) ?: return null
+            val content = decodeContent(plaintext) ?: return null
             val control = content.kind.startsWith("call-")
-            if (control && (packet.expiresAt == 0L || packet.expiresAt - packet.createdAt > 60_000)) return false
+            if (control && (packet.expiresAt == 0L || packet.expiresAt - packet.createdAt > 60_000)) return null
             return try {
-                mutex.withLock {
+                val accepted = mutex.withLock {
                     val old = vault
-                    if (old.seen.containsKey(packet.id)) return@withLock true
+                    if (old.seen.containsKey(seenKey)) return@withLock true
                     if (old.seen.size >= MAX_SEEN || old.panicMode) return@withLock false
                     if (control && !canAcceptControl(packet.from, content)) return@withLock false
                     if (!control && (old.messages.size >= MAX_MESSAGES || old.messages.sumOf { it.media.length.toLong() } + content.media.length > MAX_MEDIA_TOTAL_BYTES)) return@withLock false
                     val messages = if (control) old.messages else old.messages + Message(packet.id, packet.from,
                         if (content.kind == "text" || content.kind == "sticker-emoji") content.text else mediaLabel(content.kind),
                         false, packet.createdAt, packet.expiresAt, kind = content.kind, media = content.media, mime = content.mime, durationMs = content.durationMs)
-                    val next = old.copy(messages = messages, seen = old.seen + (packet.id to packet.createdAt))
+                    val next = old.copy(messages = messages, seen = old.seen + (seenKey to packet.createdAt))
                     requireNotNull(store).write(json.encodeToString(next))
                     vault = next
                     publish()
                     if (control) applyControl(packet.from, content)
                     true
                 }
-            } catch (_: Exception) { false }
+                if (accepted) crypto.signReceipt(me, packet) else null
+            } catch (_: Exception) { null }
         }
-        // Opt-in relay: both endpoints have to be known to this node. No plaintext is available.
-        if (!snapshot.relayEnabled || hops <= 0 || snapshot.contacts.none { it.id == packet.to }) return false
-        if (relayed.contains(packet.id)) return true
-        if (!inFlight.add(packet.id)) return false
+        // Opt-in relay: forward only an authenticated destination receipt, never plaintext.
+        if (!snapshot.relayEnabled || hops <= 0 || snapshot.contacts.none { it.id == packet.to }) return null
+        relayed[relayKey]?.let { return it }
+        if (!inFlight.add(relayKey)) return null
         return try {
-            val sent = transmit(snapshot, packet.to, packet.from, encoded, hops - 1)
-            if (sent) {
+            val receipt = transmit(snapshot, packet.to, packet.from, encoded, hops - 1)
+            if (receipt != null) {
                 if (relayed.size > MAX_SEEN) relayed.clear()
-                relayed.add(packet.id)
+                relayed[relayKey] = receipt
             }
-            sent
-        } finally { inFlight.remove(packet.id) }
+            receipt
+        } finally { inFlight.remove(relayKey) }
     }
 
     private fun canAcceptControl(from: String, content: Content): Boolean = when (content.kind) {
@@ -467,21 +470,24 @@ class Engine(
         }
     }
 
-    private fun transmit(snapshot: Vault, targetId: String, senderId: String?, encoded: String, hops: Int): Boolean {
-        if (mutable.value.panic || networkTransition || snapshot.torEnabled != vault.torEnabled) return false
+    private fun transmit(snapshot: Vault, targetId: String, senderId: String?, encoded: String, hops: Int): String? {
+        if (mutable.value.panic || networkTransition || snapshot.torEnabled != vault.torEnabled) return null
+        val packet = try { json.decodeFromString<Packet>(encoded) } catch (_: Exception) { return null }
+        if (packet.to != targetId) return null
+        fun verified(receipt: String?): String? = receipt?.takeIf { crypto.verifyReceipt(packet, it) }
         val direct = snapshot.contacts.firstOrNull { it.id == targetId }?.address.orEmpty()
-        if (snapshot.torEnabled) {
-            if (torSocksPort == 0) return false
-            if (direct.isNotBlank() && TorTransport.send(direct, torSocksPort, encoded, hops)) return true
-            return snapshot.contacts.asSequence().filter { it.id != targetId && it.id != senderId }
-                .map { it.address }.filter { it.isNotBlank() && it != direct }.distinct().take(4)
-                .any { TorTransport.send(it, torSocksPort, encoded, hops) }
-        }
-        if (direct.isNotBlank() && LanTransport.send(direct, encoded, hops)) return true
-        if (nearby?.send(encoded, hops) == true) return true
-        return snapshot.contacts.asSequence().filter { it.id != targetId && it.id != senderId }
+        val candidates = snapshot.contacts.asSequence().filter { it.id != targetId && it.id != senderId }
             .map { it.address }.filter { it.isNotBlank() && it != direct }.distinct().take(4)
-            .any { LanTransport.send(it, encoded, hops) }
+        if (snapshot.torEnabled) {
+            if (torSocksPort == 0) return null
+            if (direct.isNotBlank()) verified(TorTransport.sendReceipt(direct, torSocksPort, encoded, hops))?.let { return it }
+            for (address in candidates) verified(TorTransport.sendReceipt(address, torSocksPort, encoded, hops))?.let { return it }
+            return null
+        }
+        if (direct.isNotBlank()) verified(LanTransport.sendReceipt(direct, encoded, hops))?.let { return it }
+        verified(nearby?.send(encoded, hops))?.let { return it }
+        for (address in candidates) verified(LanTransport.sendReceipt(address, encoded, hops))?.let { return it }
+        return null
     }
 
     private suspend fun retryPending() {
@@ -494,7 +500,7 @@ class Engine(
                 if (control.expiresAt <= now) continue
                 val target = snapshot.contacts.firstOrNull { it.id == control.contactId } ?: continue
                 val sent = transmit(snapshot, target.id, null, control.packet, 3)
-                if (sent) try { mutate { old -> old.copy(controls = old.controls.filterNot { it.id == control.id }) } } catch (_: Exception) { }
+                if (sent != null) try { mutate { old -> old.copy(controls = old.controls.filterNot { it.id == control.id }) } } catch (_: Exception) { }
             }
             for (message in snapshot.messages.filter { it.pendingPacket != null }.take(30)) {
                 if (mutable.value.panic) return
@@ -502,7 +508,7 @@ class Engine(
                 if (message.createdAt < now - 7L * 24 * 60 * 60 * 1000) continue
                 val target = snapshot.contacts.firstOrNull { it.id == message.contactId } ?: continue
                 val sent = transmit(snapshot, target.id, null, message.pendingPacket!!, 3)
-                if (sent) {
+                if (sent != null) {
                     try { mutate { old -> old.copy(messages = old.messages.map { if (it.id == message.id) it.copy(pendingPacket = null) else it }) } }
                     catch (_: Exception) { /* Retrying a delivered packet is safe: recipients deduplicate. */ }
                 }

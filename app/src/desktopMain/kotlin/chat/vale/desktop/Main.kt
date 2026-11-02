@@ -113,5 +113,20 @@ private fun runtimeSelfTest() {
         val process = ProcessBuilder(tor.absolutePath, "--version").directory(tor.parentFile)
             .redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start()
         check(process.waitFor(15, java.util.concurrent.TimeUnit.SECONDS) && process.exitValue() == 0) { "Tor executable failed" }
+        // Generate a v3 service entirely offline: this exercises the same torrc and native executable.
+        val data = directory.resolve("tor-data").apply { mkdirs() }
+        val onion = directory.resolve("onion").apply { mkdirs() }
+        val config = directory.resolve("torrc-test").apply { writeText(torConfiguration(data, onion, 45454, 0, offline = true)) }
+        val offline = ProcessBuilder(tor.absolutePath, "-f", config.absolutePath).directory(tor.parentFile)
+            .redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start()
+        try {
+            val deadline = System.currentTimeMillis() + 12_000
+            val hostname = onion.resolve("hostname")
+            while (!hostname.isFile && offline.isAlive && System.currentTimeMillis() < deadline) Thread.sleep(200)
+            check(hostname.isFile && hostname.readText().trim().matches(Regex("[a-z2-7]{56}\\.onion"))) { "Offline onion service did not initialize" }
+        } finally {
+            offline.destroy()
+            if (!offline.waitFor(3, java.util.concurrent.TimeUnit.SECONDS)) offline.destroyForcibly()
+        }
     } finally { directory.deleteRecursively() }
 }

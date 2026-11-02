@@ -89,6 +89,24 @@ internal class Crypto(private val sodium: LazySodium) {
         } catch (_: Exception) { null }
     }
 
+    /** A network relay cannot forge this receipt without the recipient's Ed25519 key. */
+    fun signReceipt(identity: Identity, packet: Packet): String {
+        require(identity.publicKey == packet.to && validIdentity(identity))
+        val message = receiptBytes(packet)
+        val signature = ByteArray(64)
+        check(sodium.cryptoSignDetached(signature, message, message.size.toLong(), identity.secretKey.unb64()))
+        return signature.b64()
+    }
+
+    fun verifyReceipt(packet: Packet, receipt: String): Boolean = try {
+        val signature = receipt.unb64()
+        signature.size == 64 && signature.b64() == receipt && isPublicKey(packet.to) &&
+            sodium.cryptoSignVerifyDetached(signature, receiptBytes(packet), receiptBytes(packet).size, packet.to.unb64())
+    } catch (_: Exception) { false }
+
+    private fun receiptBytes(packet: Packet): ByteArray =
+        "VALE receipt v1\n${packet.id}\n${packet.from}\n${packet.to}".toByteArray(StandardCharsets.UTF_8)
+
     private fun deriveKey(secret: String, otherPublic: String, from: String, to: String): ByteArray {
         val curvePublic = ByteArray(32)
         val curveSecret = ByteArray(32)
