@@ -88,6 +88,8 @@ compose.desktop {
         mainClass = "chat.vale.desktop.MainKt"
         nativeDistributions {
             targetFormats(TargetFormat.Exe)
+            // JDBC, JNA and webcam capture use JDK modules not auto-detected by jpackage.
+            modules("java.sql", "java.naming", "java.management", "jdk.unsupported")
             packageName = "Vale"
             packageVersion = "0.1.0"
             description = "A quieter place to connect."

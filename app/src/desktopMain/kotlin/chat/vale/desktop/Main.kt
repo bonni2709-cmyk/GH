@@ -10,12 +10,14 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowState
 import androidx.compose.ui.window.application
 import chat.vale.ValeApp
 import chat.vale.core.Engine
+import chat.vale.core.Crypto
 import chat.vale.core.PlatformBridge
 import com.github.sarxos.webcam.Webcam
 import com.google.zxing.BinaryBitmap
@@ -26,10 +28,16 @@ import com.goterl.lazysodium.LazySodiumJava
 import com.goterl.lazysodium.SodiumJava
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
+import java.nio.file.Files
 import javax.swing.SwingUtilities
 
-fun main() = application {
-    val bridge = object : PlatformBridge {
+fun main(args: Array<String>) {
+    if (args.contains("--self-test")) {
+        runtimeSelfTest()
+        return
+    }
+    application {
+    val bridge = remember { object : PlatformBridge {
         override val mobile = false
         override fun copyText(value: String) {
             Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(value), null)
@@ -58,8 +66,8 @@ fun main() = application {
         }
         override fun clearCache() { /* The desktop app does not keep an application media cache. */ }
         override fun setDisguised(enabled: Boolean) { /* Windows shortcut icons are not changed. */ }
-    }
-    val engine = Engine(LazySodiumJava(SodiumJava()), bridge, { DesktopVault() })
+    } }
+    val engine = remember { Engine(LazySodiumJava(SodiumJava()), bridge, { DesktopVault() }) }
     Window(
         onCloseRequest = { engine.close(); exitApplication() },
         title = "Vale",
@@ -71,4 +79,22 @@ fun main() = application {
             } else false
         }) { ValeApp(engine) }
     }
+}
+}
+
+/** Exercises native crypto, DPAPI and encrypted JDBC inside the packaged runtime. */
+private fun runtimeSelfTest() {
+    val directory = Files.createTempDirectory("vale-runtime-test-").toFile()
+    try {
+        val crypto = Crypto(LazySodiumJava(SodiumJava()))
+        val alice = crypto.generateIdentity("Alice")
+        val bob = crypto.generateIdentity("Bob")
+        val now = System.currentTimeMillis()
+        val packet = crypto.seal(alice, bob.publicKey, "runtime check", 60, now)
+        check(crypto.open(bob, packet, now) == "runtime check")
+        val vault = DesktopVault(directory)
+        try { vault.write("runtime check"); check(vault.read() == "runtime check") }
+        finally { vault.close() }
+        check(!String(directory.resolve("vale.db").readBytes(), Charsets.ISO_8859_1).contains("runtime check"))
+    } finally { directory.deleteRecursively() }
 }

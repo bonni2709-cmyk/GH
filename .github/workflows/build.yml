@@ -21,7 +21,7 @@ jobs:
       matrix:
         include:
           - name: Android APK
-            os: ubuntu-latest
+            os: ubuntu-24.04
             target: android
             java: '17'
             artifact: Vale-Android-APK
@@ -60,8 +60,20 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
-          .\gradlew.bat :app:desktopTest :app:packageExe --stacktrace 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP\vale-build.log"
+          .\gradlew.bat :app:desktopTest :app:createDistributable :app:packageExe --stacktrace 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP\vale-build.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Smoke test packaged Windows runtime
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          $launcher = Get-ChildItem "app/build/compose/binaries/main/app" -Filter Vale.exe -Recurse | Select-Object -First 1
+          if (-not $launcher) { throw "Packaged launcher was not found" }
+          $process = Start-Process -FilePath $launcher.FullName -ArgumentList '--self-test' -PassThru
+          if (-not $process.WaitForExit(45000)) {
+            Stop-Process -Id $process.Id -Force
+            throw "Packaged runtime self-test timed out"
+          }
+          if ($process.ExitCode -ne 0) { throw "Packaged runtime self-test failed: $($process.ExitCode)" }
       - name: Annotate build failures
         if: failure()
         shell: bash
@@ -74,7 +86,7 @@ jobs:
             done || true
           fi
       - name: Upload application
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.path }}
