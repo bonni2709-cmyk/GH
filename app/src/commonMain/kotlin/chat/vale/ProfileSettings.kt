@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 internal fun ProfileScreen(controller: ValeController, state: ValeState) {
     val qr = remember(state.publicId, state.localAddress, state.torOnion, state.torEnabled) { controller.qrGrid(controller.contactCard()) }
     var copied by remember { mutableStateOf(false) }
+    var cardCopied by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize().background(CanvasColor).verticalScroll(rememberScrollState()).padding(28.dp), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.fillMaxWidth().widthIn(max = 760.dp)) {
             ScreenHeader("Профиль", "Ваш публичный ID", controller)
@@ -59,7 +60,11 @@ internal fun ProfileScreen(controller: ValeController, state: ValeState) {
                     OutlinedButton(onClick = { controller.copyText(state.publicId); copied = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
                         Icon(Icons.Outlined.ContentCopy, null, Modifier.size(17.dp)); Spacer(Modifier.width(8.dp)); Text(if (copied) "ID скопирован" else "Скопировать ID")
                     }
-                    Spacer(Modifier.height(13.dp))
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(onClick = { controller.copyText(controller.contactCard()); cardCopied = true }) {
+                        Text(if (cardCopied) "Карточка скопирована" else "Скопировать ID и адрес", color = Forest, fontSize = 12.sp)
+                    }
+                    Spacer(Modifier.height(5.dp))
                     Text(if (state.torEnabled) "Tor: ${state.torOnion.ifBlank { state.torStatus }}" else "Локальный IP: ${state.localAddress.ifBlank { "не найден" }}  ·  порт 45454", color = Muted, fontSize = 11.sp)
                 }
             }
@@ -139,7 +144,7 @@ internal fun SettingsScreen(controller: ValeController, state: ValeState) {
                         Text("Локальная сеть", color = Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                         Text(if (state.torEnabled) state.torOnion.ifBlank { state.torStatus } else "${state.localAddress.ifBlank { "IP не найден" }} · TCP 45454", color = Muted, fontSize = 11.sp)
                     }
-                    StatusPill(if (state.torEnabled) "TOR" else if (state.networkAvailable) "ВКЛЮЧЕНА" else "НЕДОСТУПНА", state.networkAvailable)
+                    StatusPill(if (state.torEnabled) (if (state.torStatus == "Tor подключён") "TOR" else "ОЖИДАНИЕ") else if (state.networkAvailable) "ВКЛЮЧЕНА" else "НЕДОСТУПНА", if (state.torEnabled) state.torStatus == "Tor подключён" else state.networkAvailable)
                 }
             }
             Spacer(Modifier.height(22.dp))

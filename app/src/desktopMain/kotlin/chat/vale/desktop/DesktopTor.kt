@@ -45,12 +45,18 @@ internal class DesktopTor(localPort: Int, socksPort: Int, private val onStatus: 
             } catch (_: Exception) { }
         }, "vale-tor-log").apply { isDaemon = true; start() }
         monitor = Thread({
+            val startedAt = System.currentTimeMillis()
             while (!closed) {
                 try {
                     if (!process.isAlive) { onStatus("", "Tor остановился"); break }
                     val hostname = onionDirectory.resolve("hostname").takeIf { it.isFile }?.readText()?.trim().orEmpty()
                     val onion = hostname.takeIf { it.matches(Regex("[a-z2-7]{56}\\.onion")) }.orEmpty()
-                    onStatus(onion, if (ready) "Tor подключён" else "Tor запускается")
+                    val status = when {
+                        ready -> "Tor подключён"
+                        System.currentTimeMillis() - startedAt > 120_000 -> "Tor пока не подключён; проверьте сеть"
+                        else -> "Tor запускается"
+                    }
+                    onStatus(onion, status)
                     Thread.sleep(2_000)
                 } catch (_: InterruptedException) { break }
                 catch (_: Exception) { if (!closed) onStatus("", "Tor запускается") }

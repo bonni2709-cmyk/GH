@@ -62,7 +62,7 @@ interface EncryptedStore {
 }
 
 interface NearbyLink {
-    fun send(packet: String, hops: Int): String?
+    fun send(packet: String, hops: Int, verify: (String) -> Boolean): String?
     fun close()
 }
 

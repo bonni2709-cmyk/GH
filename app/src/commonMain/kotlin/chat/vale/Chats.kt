@@ -182,7 +182,7 @@ private fun Conversation(controller: ValeController, state: ValeState, contact: 
                 Spacer(Modifier.height(2.dp))
                 Text(if (state.torEnabled) "Через Tor" else if (contact.address.isBlank()) "Адрес не указан · Nearby" else "Локальное соединение", fontSize = 11.sp, color = Muted)
             }
-            if (wide) StatusPill(if (state.torEnabled) "TOR" else if (state.networkAvailable) "ЛОКАЛЬНАЯ СЕТЬ" else "СЕТЬ НЕДОСТУПНА", state.networkAvailable)
+            if (wide) StatusPill(if (state.torEnabled) (if (state.torStatus == "Tor подключён") "TOR" else "TOR · ОЖИДАНИЕ") else if (state.networkAvailable) "ЛОКАЛЬНАЯ СЕТЬ" else "СЕТЬ НЕДОСТУПНА", if (state.torEnabled) state.torStatus == "Tor подключён" else state.networkAvailable)
             Spacer(Modifier.width(4.dp))
             IconButton(onClick = { controller.startCall(false) }, modifier = Modifier.size(36.dp)) {
                 Icon(Icons.Outlined.Call, "Голосовой звонок", tint = Sage, modifier = Modifier.size(20.dp))

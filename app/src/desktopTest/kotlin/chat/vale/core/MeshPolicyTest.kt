@@ -31,7 +31,8 @@ class MeshPolicyTest {
                 receivers[name] = onPacket
                 onStatus(links[name]?.size ?: 0, "тест")
                 return object : NearbyLink {
-                    override fun send(packet: String, hops: Int) = links[name].orEmpty().firstNotNullOfOrNull { receivers[it]?.invoke(packet, hops) }
+                    override fun send(packet: String, hops: Int, verify: (String) -> Boolean) =
+                        links[name].orEmpty().firstNotNullOfOrNull { receivers[it]?.invoke(packet, hops)?.takeIf(verify) }
                     override fun close() { receivers.remove(name) }
                 }
             }
@@ -98,14 +99,21 @@ class MeshPolicyTest {
             val alice = a.state.value.publicId; val bob = b.state.value.publicId
             a.addContact("Bob", bob, "127.0.0.1:${ports[1]}"); b.addContact("Alice", alice, "127.0.0.1:${ports[0]}")
             waitFor { a.state.value.contacts.size == 1 && b.state.value.contacts.size == 1 }
+            a.setNearby(true)
+            waitFor { a.state.value.nearbyEnabled && mesh.receivers.containsKey("a") }
             a.setTor(true)
             waitFor { a.state.value.torEnabled && a.state.value.torOnion.endsWith(".onion") }
+            assertFalse(mesh.receivers.containsKey("a"))
             assertTrue(a.contactCard().endsWith(".onion"))
             a.selectContact(bob); a.sendMessage("must not leave via LAN"); a.startCall(false)
             delay(1_000)
             assertTrue(a.state.value.messages.any { it.pending })
             assertFalse(b.state.value.messages.any { it.text == "must not leave via LAN" })
             assertTrue(a.state.value.call == null)
+            a.setTor(false)
+            waitFor { !a.state.value.torEnabled && a.state.value.networkAvailable && mesh.receivers.containsKey("a") }
+            waitFor { b.state.value.messages.any { it.text == "must not leave via LAN" } }
+            waitFor { a.state.value.messages.any { !it.pending } }
         } finally { a.close(); b.close() }
     }
 }

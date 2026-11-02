@@ -11,6 +11,7 @@ import java.net.Socket
 import java.net.SocketException
 import java.util.Collections
 import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 
@@ -24,6 +25,7 @@ internal class LanTransport(
     private val onPacket: (String, Int) -> String?,
 ) {
     private var server: ServerSocket? = null
+    private val openSockets = ConcurrentHashMap.newKeySet<Socket>()
     private val workers = ThreadPoolExecutor(2, 6, 30, TimeUnit.SECONDS, ArrayBlockingQueue(24))
 
     fun start(): Boolean = try {
@@ -36,9 +38,12 @@ internal class LanTransport(
             while (!listener.isClosed) {
                 try {
                     val socket = listener.accept()
+                    val remote = socket.inetAddress
+                    if (!remote.isSiteLocalAddress && !remote.isLinkLocalAddress && !remote.isLoopbackAddress) { socket.close(); continue }
+                    openSockets.add(socket)
                     try {
-                        workers.execute { handle(socket) }
-                    } catch (_: Exception) { socket.close() }
+                        workers.execute { try { handle(socket) } finally { openSockets.remove(socket) } }
+                    } catch (_: Exception) { openSockets.remove(socket); socket.close() }
                 } catch (_: SocketException) {
                     break
                 } catch (_: Exception) {
@@ -53,6 +58,7 @@ internal class LanTransport(
         try {
             socket.use {
                 // Bound slow/partial inbound frames; longer outbound waits cover relays.
+                val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(25)
                 it.soTimeout = 8_000
                 val input = DataInputStream(it.getInputStream())
                 val length = input.readInt()
@@ -60,7 +66,15 @@ internal class LanTransport(
                 val hops = input.readUnsignedByte()
                 if (hops !in 0..3) return
                 val bytes = ByteArray(length)
-                input.readFully(bytes)
+                var offset = 0
+                while (offset < length) {
+                    val remaining = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime())
+                    if (remaining <= 0) return
+                    it.soTimeout = minOf(8_000L, remaining).coerceAtLeast(1).toInt()
+                    val count = input.read(bytes, offset, length - offset)
+                    if (count < 0) return
+                    offset += count
+                }
                 val receipt = onPacket(String(bytes, Charsets.UTF_8), hops)?.toByteArray(Charsets.US_ASCII)
                 DataOutputStream(it.getOutputStream()).apply {
                     if (receipt == null || receipt.size !in 1..128) writeShort(0) else { writeShort(receipt.size); write(receipt) }
@@ -74,6 +88,8 @@ internal class LanTransport(
 
     fun close() {
         try { server?.close() } catch (_: Exception) { }
+        openSockets.forEach { try { it.close() } catch (_: Exception) { } }
+        openSockets.clear()
         workers.shutdownNow()
     }
 

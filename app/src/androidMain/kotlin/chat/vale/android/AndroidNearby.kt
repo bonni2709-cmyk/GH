@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import chat.vale.core.MAX_PACKET_SIZE
 import chat.vale.core.NearbyLink
+import chat.vale.core.ReceiptCollector
 import com.google.android.gms.nearby.Nearby
 import com.google.android.gms.nearby.connection.AdvertisingOptions
 import com.google.android.gms.nearby.connection.ConnectionInfo
@@ -22,7 +23,6 @@ import java.nio.ByteBuffer
 import java.security.SecureRandom
 import java.util.Base64
 import java.util.concurrent.ArrayBlockingQueue
-import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
@@ -37,7 +37,7 @@ internal class AndroidNearby(
     private val client = Nearby.getConnectionsClient(context.applicationContext)
     private val peers = ConcurrentHashMap.newKeySet<String>()
     private val requesting = ConcurrentHashMap.newKeySet<String>()
-    private val awaiting = ConcurrentHashMap<String, CompletableFuture<String?>>()
+    private val awaiting = ConcurrentHashMap<String, ReceiptCollector>()
     private val assemblies = HashMap<String, Assembly>()
     private val pool = ThreadPoolExecutor(2, 10, 30, TimeUnit.SECONDS, ArrayBlockingQueue(64)) { task ->
         Thread(task, "vale-nearby").apply { isDaemon = true }
@@ -86,6 +86,7 @@ internal class AndroidNearby(
         }
         override fun onDisconnected(endpointId: String) {
             peers.remove(endpointId); requesting.remove(endpointId)
+            awaiting.values.forEach { it.respond(endpointId, null) }
             report(if (peers.isEmpty()) "Поиск устройств" else "Рядом: ${peers.size}")
         }
     }
@@ -97,9 +98,10 @@ internal class AndroidNearby(
             if (!bytes.copyOfRange(0, 4).contentEquals(MAGIC)) return
             val id = encodeId(bytes.copyOfRange(5, 21))
             if (bytes[4].toInt() == ACK) {
-                if (bytes.size in 23..150 && bytes[21].toInt() == 1) {
+                if (bytes.size == 22 && bytes[21].toInt() == 0) awaiting[id]?.respond(endpointId, null)
+                else if (bytes.size in 23..150 && bytes[21].toInt() == 1) {
                     val receipt = String(bytes, 22, bytes.size - 22, Charsets.US_ASCII)
-                    awaiting[id]?.complete(receipt)
+                    awaiting[id]?.respond(endpointId, receipt)
                 }
                 return
             }
@@ -152,15 +154,15 @@ internal class AndroidNearby(
         try { client.sendPayload(endpoint, Payload.fromBytes(frame)) } catch (_: Exception) { }
     }
 
-    override fun send(packet: String, hops: Int): String? {
+    override fun send(packet: String, hops: Int, verify: (String) -> Boolean): String? {
         if (closed || hops !in 0..3) return null
         val destinations = peers.toList().take(MAX_PEERS)
         val body = packet.toByteArray(Charsets.UTF_8)
         if (destinations.isEmpty() || body.size !in 1..MAX_PACKET_SIZE) return null
         val requestId = ByteArray(16).also { SecureRandom().nextBytes(it) }
         val key = encodeId(requestId)
-        val future = CompletableFuture<String?>()
-        awaiting[key] = future
+        val collector = ReceiptCollector(destinations, verify)
+        awaiting[key] = collector
         return try {
             val total = (body.size + CHUNK - 1) / CHUNK
             for (endpoint in destinations) {
@@ -170,10 +172,10 @@ internal class AndroidNearby(
                     val length = minOf(CHUNK, body.size - start)
                     val frame = ByteBuffer.allocate(HEADER + length).put(MAGIC).put(DATA.toByte()).put(requestId)
                         .put(hops.toByte()).putShort(total.toShort()).putShort(index.toShort()).put(body, start, length).array()
-                    client.sendPayload(endpoint, Payload.fromBytes(frame))
+                    client.sendPayload(endpoint, Payload.fromBytes(frame)).addOnFailureListener { collector.respond(endpoint, null) }
                 }
             }
-            future.get(75, TimeUnit.SECONDS)
+            collector.await(75)
         } catch (_: Exception) { null }
         finally { awaiting.remove(key) }
     }
@@ -184,7 +186,7 @@ internal class AndroidNearby(
         if (closed) return
         closed = true
         try { client.stopDiscovery(); client.stopAdvertising(); client.stopAllEndpoints() } catch (_: Exception) { }
-        awaiting.values.forEach { it.complete(null) }; awaiting.clear()
+        awaiting.values.forEach { it.cancel() }; awaiting.clear()
         peers.clear(); requesting.clear(); synchronized(assemblies) { assemblies.clear() }
         pool.shutdownNow()
     }

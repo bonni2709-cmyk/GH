@@ -27,12 +27,12 @@ class CryptoTest {
         assertTrue(crypto.verifyReceipt(packet, receipt))
         assertFalse(crypto.verifyReceipt(packet.copy(id = crypto.seal(alice, bob.publicKey, "other", 0, now).id), receipt))
         assertFalse(crypto.verifyReceipt(packet.copy(to = outsider.publicKey), receipt))
-        assertFalse(crypto.verifyReceipt(packet, receipt.dropLast(2) + "AA"))
+        assertFalse(crypto.verifyReceipt(packet, (if (receipt[0] == 'A') "B" else "A") + receipt.substring(1)))
         assertNull(crypto.open(outsider, packet, now))
         assertNull(crypto.open(alice, packet, now))
         assertFalse(crypto.verify(packet.copy(to = outsider.publicKey), now))
         assertFalse(crypto.verify(packet.copy(createdAt = packet.createdAt + 1), now))
-        assertFalse(crypto.verify(packet.copy(ciphertext = packet.ciphertext.dropLast(2) + "AA"), now))
+        assertFalse(crypto.verify(packet.copy(ciphertext = (if (packet.ciphertext[0] == 'A') "B" else "A") + packet.ciphertext.substring(1)), now))
         assertFalse(crypto.verify(packet, now + 60_001))
     }
 

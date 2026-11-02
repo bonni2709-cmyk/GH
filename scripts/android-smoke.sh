@@ -112,6 +112,10 @@ echo 'Android APK initialized encrypted storage, created a profile and restored 
 snapshot
 position=$(coordinates settings) || { echo 'Settings tab not found' >&2; cat "$RUNNER_TEMP/vale-window.xml"; exit 1; }
 adb shell input tap $position
+# On short screens the switch may only be exposed at the clipped bottom edge;
+# move it fully into the scroll viewport before calculating its tap position.
+sleep 1
+adb shell input swipe 160 500 160 250 350
 position=''
 for _ in {1..6}; do
     sleep 1
@@ -124,7 +128,24 @@ if [[ -z "$position" ]]; then
     cat "$RUNNER_TEMP/vale-window.xml"
     exit 1
 fi
+echo "Tapping Tor switch at $position"
 adb shell input tap $position
+switched=0
+for _ in {1..10}; do
+    sleep 1
+    snapshot
+    if python3 - "$RUNNER_TEMP/vale-window.xml" <<'PY_SWITCH'
+import sys, xml.etree.ElementTree as ET
+root = ET.parse(sys.argv[1]).getroot()
+sys.exit(0 if any(n.get('content-desc') == 'Режим Tor' and n.get('checked') == 'true' for n in root.iter('node')) else 1)
+PY_SWITCH
+    then switched=1; break; fi
+done
+if [[ $switched != 1 ]]; then
+    echo 'Tor switch was not enabled' >&2
+    cat "$RUNNER_TEMP/vale-window.xml"
+    exit 1
+fi
 onion=0
 for _ in {1..30}; do
     if adb shell run-as chat.vale.app cat no_backup/tor/onion/hostname 2>/dev/null | grep -Eq '^[a-z2-7]{56}\.onion'; then onion=1; break; fi

@@ -40,13 +40,19 @@ internal class AndroidTor(
         bound = context.bindService(Intent(context, TorService::class.java), connection, Context.BIND_AUTO_CREATE)
         if (!bound) onStatus("", "Не удалось запустить Tor")
         monitor = Thread({
+            val startedAt = System.currentTimeMillis()
             while (!closed && bound) {
                 try {
                     val hostname = File(onionDirectory, "hostname").takeIf { it.isFile }?.readText()?.trim().orEmpty()
                     val onion = hostname.takeIf { it.matches(Regex("[a-z2-7]{56}\\.onion")) }.orEmpty()
                     val phase = try { service?.torControlConnection?.getInfo("status/bootstrap-phase").orEmpty() } catch (_: Exception) { "" }
                     val ready = phase.contains("PROGRESS=100")
-                    onStatus(onion, if (ready) "Tor подключён" else "Tor запускается")
+                    val status = when {
+                        ready -> "Tor подключён"
+                        System.currentTimeMillis() - startedAt > 120_000 -> "Tor пока не подключён; проверьте сеть"
+                        else -> "Tor запускается"
+                    }
+                    onStatus(onion, status)
                     Thread.sleep(2_000)
                 } catch (_: InterruptedException) { break }
                 catch (_: Exception) { if (!closed) onStatus("", "Tor запускается") }

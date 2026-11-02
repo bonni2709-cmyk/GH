@@ -10,7 +10,7 @@ header{display:flex;align-items:center;gap:12px;margin-bottom:42px}.mark{width:3
 .brand{font-size:22px;font-weight:650;letter-spacing:-1px}.eyebrow{font-size:10px;letter-spacing:.17em;font-weight:700;color:#78917d;text-transform:uppercase}
 h1{font-size:30px;letter-spacing:-1px;margin:10px 0 10px}p{color:#78837b;font-size:14px;line-height:1.65;margin:0 0 14px}
 .card{background:#fff;border:1px solid #e4e9e3;border-radius:22px;padding:26px;margin-top:18px;box-shadow:0 14px 48px #263e3010}
-.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}button,.file{border:0;border-radius:12px;background:#304b39;color:#fff;font:600 13px inherit;padding:13px 16px;cursor:pointer}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}button,.file{border:0;border-radius:12px;background:#304b39;color:#fff;font:600 13px/1.2 system-ui,sans-serif;padding:13px 16px;cursor:pointer}
 button.secondary,.file{color:#304b39;background:#edf2ec}button:disabled{opacity:.45;cursor:not-allowed}button:hover:not(:disabled),.file:hover{filter:brightness(.95)}
 .status{min-height:22px;margin-top:16px;color:#65796a;font-size:13px}.error{color:#aa534d}.preview{display:block;width:min(270px,75vw);height:min(270px,75vw);border-radius:50%;object-fit:cover;background:#e6ece5;margin:22px auto}
 audio{width:100%;margin:15px 0}video.remote{max-height:60vh}.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}.small{font-size:11px}.badge{display:inline-block;border-radius:999px;background:#edf3ec;color:#607b64;font-size:10px;font-weight:700;padding:7px 10px;letter-spacing:.08em}
@@ -82,11 +82,11 @@ async function startCall(){
     if(config.role==='answer'){await pc.setRemoteDescription({type:'offer',sdp:config.offer});await pc.setLocalDescription(await pc.createAnswer())}
     else await pc.setLocalDescription(await pc.createOffer());
     await waitGathering(pc);await callAction(config.role==='answer'?'answer':'offer',pc.localDescription.sdp);setStatus(config.role==='answer'?'Подключаемся…':'Ожидаем ответа собеседника…');
-    callTimer=setInterval(async()=>{try{const events=await (await api('/events')).json();for(const ev of events){if(ev.kind==='answer'&&pc)await pc.setRemoteDescription({type:'answer',sdp:ev.sdp});if(ev.kind==='end'){stopCallMedia();closing=true;setStatus('Звонок завершён.')}}}catch(e){stopCallMedia();setStatus('Vale недоступен.',true)}},1200);
+    callTimer=setInterval(async()=>{try{const events=await (await api('/events')).json();for(const ev of events){if(ev.kind==='answer'&&pc)await pc.setRemoteDescription({type:'answer',sdp:ev.sdp});if(ev.kind==='end'){stopCallMedia();closing=true;await callAction('hangup').catch(()=>{});setStatus('Звонок завершён.')}}}catch(e){stopCallMedia();setStatus('Vale недоступен.',true)}},1200);
   }catch(e){stopCallMedia();byId('beginCall').disabled=false;setStatus('Не удалось начать звонок: проверьте разрешения и сеть.',true)}
 }
-async function hangup(){if(closing)return;closing=true;try{await callAction('hangup')}catch(e){}stopCallMedia();setStatus('Звонок завершён.')}
-window.addEventListener('pagehide',()=>{if(pc&&!closing){fetch('/action',{method:'POST',headers:{'X-Vale-Token':token,'Content-Type':'application/json'},body:JSON.stringify({action:'hangup'}),keepalive:true}).catch(()=>{});stopCallMedia()}});
+async function hangup(){if(closing)return;closing=true;stopCallMedia();try{await callAction('hangup')}catch(e){}setStatus('Звонок завершён.')}
+window.addEventListener('pagehide',()=>{if((!config||config.mode==='call')&&!closing){closing=true;stopCallMedia();fetch('/action',{method:'POST',headers:{'X-Vale-Token':token,'Content-Type':'application/json'},body:JSON.stringify({action:'hangup'}),keepalive:true}).catch(()=>{})}});
 async function init(){
   try{config=await (await api('/config')).json();byId('intro').textContent=config.contact?'Разговор с '+config.contact:'';
     if(config.mode==='studio'){byId('title').textContent='Поделиться моментом';byId('studio').hidden=false}

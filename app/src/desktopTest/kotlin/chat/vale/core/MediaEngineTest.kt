@@ -87,7 +87,16 @@ class MediaEngineTest {
             var answers = emptyList<BrowserEvent>()
             waitFor { answers = events(outgoing); answers.any { it.kind == "answer" } }
             assertTrue(answers.first().sdp.contains("answer"))
-            a.endCall()
+            // Tor-only mode must wait until the direct browser connection is stopped.
+            a.setTor(true)
+            assertTrue(!a.state.value.torEnabled)
+            var stopA = emptyList<BrowserEvent>()
+            waitFor { stopA = events(outgoing); stopA.any { it.kind == "end" } }
+            assertEquals(200, action(outgoing, BrowserRequest(action = "hangup")))
+            waitFor { a.state.value.call == null }
+            var stopB = emptyList<BrowserEvent>()
+            waitFor { stopB = events(incoming); stopB.any { it.kind == "end" } }
+            assertEquals(200, action(incoming, BrowserRequest(action = "hangup")))
             waitFor { b.state.value.call == null }
         } finally { a.close(); b.close() }
     }

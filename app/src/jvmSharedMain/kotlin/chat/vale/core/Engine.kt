@@ -30,6 +30,7 @@ import java.net.ServerSocket
 import java.net.InetAddress
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
 
 private const val SEEN_RETENTION = 8L * 24 * 60 * 60 * 1000
 private const val MAX_SEEN = 10_000
@@ -47,6 +48,8 @@ class Engine(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
     private val retryMutex = Mutex()
+    private val networkLock = Any()
+    @Volatile private var closed = false
     private val mutable = MutableStateFlow(ValeState())
     override val state: StateFlow<ValeState> = mutable
     override val isMobile get() = platform.mobile
@@ -57,6 +60,8 @@ class Engine(
     @Volatile private var tor: TorHandle? = null
     @Volatile private var torSocksPort: Int = 0
     @Volatile private var networkTransition: Boolean = false
+    private val torEpoch = AtomicLong()
+    private val nearbyEpoch = AtomicLong()
     @Volatile private var panicJob: Job? = null
     private val inFlight = ConcurrentHashMap.newKeySet<String>()
     private val relayed = ConcurrentHashMap<String, String>()
@@ -68,6 +73,8 @@ class Engine(
         val id: String, val contactId: String, val video: Boolean,
         val incoming: Boolean, val offer: String = "",
         @Volatile var server: MediaServer? = null,
+        @Volatile var stopping: Boolean = false,
+        @Volatile var notifyAfterStop: Boolean = true,
     )
 
     init {
@@ -234,32 +241,62 @@ class Engine(
 
     override fun acceptCall() {
         val session = call ?: return
+        if (vault.torEnabled || networkTransition || mutable.value.panic || closed) {
+            requestStopCall(session, false)
+            error("Прямые звонки недоступны в режиме Tor")
+            return
+        }
         if (!session.incoming || session.server != null) return
         mutable.update { it.copy(call = CallView(session.contactId, false, session.video, "Подключение в браузере")) }
         if (!openCallBrowser(session)) finishCall(session, true)
     }
 
     override fun declineCall() { call?.let { finishCall(it, true) } }
-    override fun endCall() { call?.let { finishCall(it, true) } }
+    override fun endCall() { call?.let { requestStopCall(it, true) } }
 
     private fun openCallBrowser(session: CallSession): Boolean {
+        if (vault.torEnabled || networkTransition || mutable.value.panic || closed) return false
         val name = vault.contacts.firstOrNull { it.id == session.contactId }?.name ?: return false
         val config = BrowserConfig(mode = "call", contact = name, video = session.video,
             role = if (session.incoming) "answer" else "offer", offer = session.offer)
         val server = openBrowser(config) { request ->
-            if (call !== session || mutable.value.panic) false else when (request.action) {
+            if (call !== session || mutable.value.panic || vault.torEnabled || networkTransition || closed ||
+                (session.stopping && request.action != "hangup")) false else when (request.action) {
                 "offer", "answer" -> {
                     val kind = if (request.action == "offer") "call-offer" else "call-answer"
                     val allowed = (request.action == "offer" && !session.incoming) || (request.action == "answer" && session.incoming)
                     allowed && runBlocking { queueControl(session.contactId, Content(kind, callId = session.id, sdp = request.sdp, video = session.video)) }
                 }
                 "connected" -> { mutable.update { it.copy(call = CallView(session.contactId, false, session.video, "Соединение установлено")) }; true }
-                "hangup" -> { finishCall(session, true); true }
+                "hangup" -> { finishCall(session, if (session.stopping) session.notifyAfterStop else true); true }
                 else -> false
             }
         } ?: return false
         session.server = server
+        if (call !== session || vault.torEnabled || networkTransition || mutable.value.panic || closed) {
+            synchronized(browserLock) { if (browser === server) browser = null }
+            server.close()
+            return false
+        }
         return true
+    }
+
+    /** The browser must stop its PeerConnection before Tor-only mode may start. */
+    private fun requestStopCall(session: CallSession, notify: Boolean) {
+        synchronized(browserLock) {
+            if (call !== session) return
+            val server = session.server
+            if (server != null) {
+                if (!notify) session.notifyAfterStop = false
+                if (!session.stopping) {
+                    session.stopping = true
+                    server.push(BrowserEvent("end"))
+                    mutable.update { it.copy(call = it.call?.copy(status = "Закройте вкладку звонка")) }
+                }
+                return
+            }
+        }
+        finishCall(session, notify)
     }
 
     private fun finishCall(session: CallSession, notify: Boolean) {
@@ -312,53 +349,75 @@ class Engine(
     }
 
     private fun startNearby() {
-        if (nearby != null || mutable.value.panic || vault.identity == null || !vault.nearbyEnabled || vault.torEnabled) return
-        mutable.update { it.copy(nearbyStatus = "Запуск…") }
-        nearby = platform.startNearby(
-            { packet, hops -> runBlocking { receive(packet, hops) } },
-            { count, status -> mutable.update { it.copy(nearbyPeers = count, nearbyStatus = status) } },
-        )
-        if (nearby == null) mutable.update { it.copy(nearbyStatus = "Недоступно") }
+        synchronized(networkLock) {
+            if (closed || networkTransition || nearby != null || mutable.value.panic || vault.identity == null || !vault.nearbyEnabled || vault.torEnabled) return
+            val epoch = nearbyEpoch.incrementAndGet()
+            mutable.update { it.copy(nearbyStatus = "Запуск…") }
+            nearby = platform.startNearby(
+                { packet, hops -> if (nearbyEpoch.get() == epoch) runBlocking { receive(packet, hops) } else null },
+                { count, status -> if (nearbyEpoch.get() == epoch) mutable.update { it.copy(nearbyPeers = count, nearbyStatus = status) } },
+            )
+            if (nearby == null) mutable.update { it.copy(nearbyStatus = "Недоступно") }
+        }
     }
 
     private fun stopNearby() {
-        nearby?.close(); nearby = null
-        mutable.update { it.copy(nearbyPeers = 0, nearbyStatus = "Выключено") }
+        synchronized(networkLock) {
+            nearbyEpoch.incrementAndGet()
+            nearby?.close(); nearby = null
+            mutable.update { it.copy(nearbyPeers = 0, nearbyStatus = "Выключено") }
+        }
     }
 
     override fun setTor(enabled: Boolean) {
         if (vault.torEnabled == enabled || networkTransition) return
         // Block new sends before asynchronously changing the persistent policy.
         networkTransition = true
+        if (enabled) {
+            val active = call
+            if (active != null) {
+                networkTransition = false
+                requestStopCall(active, true)
+                error("Завершите звонок и закройте вкладку браузера, затем включите Tor")
+                return
+            }
+        }
         scope.launch {
             try {
-                if (enabled) call?.let { finishCall(it, false) }
-                transport?.close(); transport = null
-                stopNearby(); stopTor()
+                stopNetwork()
                 mutate { it.copy(torEnabled = enabled, controls = emptyList()) }
                 startNetwork()
             } catch (_: Exception) { error("Не удалось изменить настройки Tor") }
-            finally { networkTransition = false }
+            finally {
+                networkTransition = false
+                if (!vault.torEnabled && !mutable.value.panic && !closed) startNearby()
+            }
         }
     }
 
     private fun startTor() {
-        if (!vault.torEnabled || mutable.value.panic || tor != null) return
-        try {
-            val port = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { it.localPort }
-            torSocksPort = port
-            mutable.update { it.copy(torStatus = "Запуск Tor…", torOnion = "") }
-            tor = platform.startTor(listenPort, port) { onion, status ->
-                val safe = onion.takeIf { TorTransport.validEndpoint(it) }.orEmpty()
-                if (vault.torEnabled && !mutable.value.panic) mutable.update { it.copy(torOnion = safe, torStatus = status) }
-            }
-            if (tor == null) { torSocksPort = 0; mutable.update { it.copy(torStatus = "Tor недоступен") } }
-        } catch (_: Exception) { torSocksPort = 0; mutable.update { it.copy(torStatus = "Tor недоступен") } }
+        synchronized(networkLock) {
+            if (closed || !vault.torEnabled || mutable.value.panic || tor != null) return
+            try {
+                val epoch = torEpoch.incrementAndGet()
+                val port = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { it.localPort }
+                torSocksPort = port
+                mutable.update { it.copy(torStatus = "Запуск Tor…", torOnion = "") }
+                tor = platform.startTor(listenPort, port) { onion, status ->
+                    val safe = onion.takeIf { TorTransport.validEndpoint(it) }.orEmpty()
+                    if (torEpoch.get() == epoch && vault.torEnabled && !mutable.value.panic) mutable.update { it.copy(torOnion = safe, torStatus = status) }
+                }
+                if (tor == null) { torSocksPort = 0; mutable.update { it.copy(torStatus = "Tor недоступен") } }
+            } catch (_: Exception) { torSocksPort = 0; mutable.update { it.copy(torStatus = "Tor недоступен") } }
+        }
     }
 
     private fun stopTor() {
-        tor?.close(); tor = null; torSocksPort = 0
-        mutable.update { it.copy(torOnion = "", torStatus = "Выключено") }
+        synchronized(networkLock) {
+            torEpoch.incrementAndGet()
+            tor?.close(); tor = null; torSocksPort = 0
+            mutable.update { it.copy(torOnion = "", torStatus = "Выключено") }
+        }
     }
 
     private suspend fun mutate(block: (Vault) -> Vault) = mutex.withLock {
@@ -386,16 +445,28 @@ class Engine(
     }
 
     private fun startNetwork() {
-        if (transport != null || mutable.value.panic || vault.identity == null) return
-        val candidate = LanTransport(listenPort, loopbackOnly = vault.torEnabled) { packet, hops -> runBlocking { receive(packet, hops) } }
-        if (candidate.start()) {
-            transport = candidate
-            mutable.update { it.copy(networkAvailable = true) }
-        } else {
-            candidate.close()
+        synchronized(networkLock) {
+            if (closed || transport != null || mutable.value.panic || vault.identity == null) return
+            val candidate = LanTransport(listenPort, loopbackOnly = vault.torEnabled) { packet, hops -> runBlocking { receive(packet, hops) } }
+            if (candidate.start()) {
+                transport = candidate
+                mutable.update { it.copy(networkAvailable = true) }
+            } else {
+                candidate.close()
+                mutable.update { it.copy(networkAvailable = false) }
+            }
+            if (vault.torEnabled) {
+                if (transport != null) startTor() else mutable.update { it.copy(torStatus = "Локальный порт занят; Tor не запущен") }
+            } else startNearby()
+        }
+    }
+
+    private fun stopNetwork() {
+        synchronized(networkLock) {
+            transport?.close(); transport = null
+            stopNearby(); stopTor()
             mutable.update { it.copy(networkAvailable = false) }
         }
-        if (transport != null) { if (vault.torEnabled) startTor() else startNearby() }
     }
 
     private suspend fun receive(encoded: String, hops: Int): String? {
@@ -450,8 +521,8 @@ class Engine(
     }
 
     private fun canAcceptControl(from: String, content: Content): Boolean = when (content.kind) {
-        "call-offer" -> call == null && !vault.torEnabled
-        "call-answer" -> call?.let { !it.incoming && it.contactId == from && it.id == content.callId && it.server != null } == true
+        "call-offer" -> call == null && !vault.torEnabled && !networkTransition
+        "call-answer" -> !vault.torEnabled && !networkTransition && call?.let { !it.incoming && it.contactId == from && it.id == content.callId && it.server != null } == true
         "call-end" -> call?.let { it.contactId == from && it.id == content.callId } == true
         else -> false
     }
@@ -466,7 +537,7 @@ class Engine(
                 call?.server?.push(BrowserEvent("answer", content.sdp))
                 mutable.update { it.copy(call = it.call?.copy(status = "Подключение")) }
             }
-            "call-end" -> call?.let { finishCall(it, false) }
+            "call-end" -> call?.let { requestStopCall(it, false) }
         }
     }
 
@@ -485,7 +556,7 @@ class Engine(
             return null
         }
         if (direct.isNotBlank()) verified(LanTransport.sendReceipt(direct, encoded, hops))?.let { return it }
-        verified(nearby?.send(encoded, hops))?.let { return it }
+        verified(nearby?.send(encoded, hops) { crypto.verifyReceipt(packet, it) })?.let { return it }
         for (address in candidates) verified(LanTransport.sendReceipt(address, encoded, hops))?.let { return it }
         return null
     }
@@ -538,8 +609,7 @@ class Engine(
         mutable.update { it.copy(panic = true, profileName = null, publicId = "", contacts = emptyList(), messages = emptyList(), selectedContact = null, networkAvailable = false, call = null) }
         call = null
         synchronized(browserLock) { browser?.close(); browser = null }
-        transport?.close(); transport = null
-        stopNearby(); stopTor()
+        stopNetwork()
         platform.clearCache()
         panicJob = scope.launch {
             try { mutate { it.copy(panicMode = true) }; platform.setDisguised(true) }
@@ -561,10 +631,10 @@ class Engine(
     override fun dismissError() { mutable.update { it.copy(error = null) } }
     private fun error(message: String) { mutable.update { it.copy(error = message) } }
     override fun close() {
+        closed = true
         call = null
         synchronized(browserLock) { browser?.close(); browser = null }
-        transport?.close(); transport = null
-        stopNearby(); stopTor()
+        stopNetwork()
         scope.cancel()
         try { store?.close() } catch (_: Exception) { }
     }

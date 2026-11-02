@@ -74,6 +74,10 @@ jobs:
           $ErrorActionPreference = 'Continue'
           .\gradlew.bat :app:desktopTest :app:createDistributable :app:packageExe --stacktrace 2>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP\vale-build.log"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Exercise browser recording and direct WebRTC
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: node scripts/browser-smoke.cjs
       - name: Smoke test packaged Windows runtime
         if: matrix.target == 'windows'
         shell: pwsh
