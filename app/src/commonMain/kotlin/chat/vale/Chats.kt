@@ -180,9 +180,9 @@ private fun Conversation(controller: ValeController, state: ValeState, contact: 
             Column(Modifier.weight(1f)) {
                 Text(contact.name, color = Ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(2.dp))
-                Text(if (contact.address.isBlank()) "Адрес не указан" else "Локальное соединение", fontSize = 11.sp, color = Muted)
+                Text(if (state.torEnabled) "Через Tor" else if (contact.address.isBlank()) "Адрес не указан · Nearby" else "Локальное соединение", fontSize = 11.sp, color = Muted)
             }
-            if (wide) StatusPill(if (state.networkAvailable) "ЛОКАЛЬНАЯ СЕТЬ" else "СЕТЬ НЕДОСТУПНА", state.networkAvailable)
+            if (wide) StatusPill(if (state.torEnabled) "TOR" else if (state.networkAvailable) "ЛОКАЛЬНАЯ СЕТЬ" else "СЕТЬ НЕДОСТУПНА", state.networkAvailable)
             Spacer(Modifier.width(4.dp))
             IconButton(onClick = { controller.startCall(false) }, modifier = Modifier.size(36.dp)) {
                 Icon(Icons.Outlined.Call, "Голосовой звонок", tint = Sage, modifier = Modifier.size(20.dp))
@@ -208,7 +208,7 @@ private fun Conversation(controller: ValeController, state: ValeState, contact: 
                     Spacer(Modifier.height(14.dp))
                     Text("Начните с простого «привет»", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
                     Spacer(Modifier.height(6.dp))
-                    Text("Оба собеседника должны добавить друг друга\nи открыть приложение в одной локальной сети.", color = Muted, fontSize = 12.sp, lineHeight = 18.sp, textAlign = TextAlign.Center)
+                    Text("Оба собеседника должны добавить друг друга\nи открыть приложение.", color = Muted, fontSize = 12.sp, lineHeight = 18.sp, textAlign = TextAlign.Center)
                 }
             }
         } else {

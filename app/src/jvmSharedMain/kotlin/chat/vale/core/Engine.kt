@@ -26,6 +26,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.encodeToString
 import java.text.SimpleDateFormat
 import java.security.SecureRandom
+import java.net.ServerSocket
+import java.net.InetAddress
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
@@ -44,12 +46,17 @@ class Engine(
     private val crypto = Crypto(sodium)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val mutex = Mutex()
+    private val retryMutex = Mutex()
     private val mutable = MutableStateFlow(ValeState())
     override val state: StateFlow<ValeState> = mutable
     override val isMobile get() = platform.mobile
     @Volatile private var vault = Vault()
     @Volatile private var store: EncryptedStore? = null
     @Volatile private var transport: LanTransport? = null
+    @Volatile private var nearby: NearbyLink? = null
+    @Volatile private var tor: TorHandle? = null
+    @Volatile private var torSocksPort: Int = 0
+    @Volatile private var networkTransition: Boolean = false
     @Volatile private var panicJob: Job? = null
     private val inFlight = ConcurrentHashMap.newKeySet<String>()
     private val relayed = ConcurrentHashMap.newKeySet<String>()
@@ -110,7 +117,7 @@ class Engine(
                 val id = if (parts.firstOrNull() == "vale1" && parts.size in 2..3) parts[1] else idOrQr.trim()
                 val host = address.trim().ifEmpty { if (parts.firstOrNull() == "vale1") parts.getOrNull(2).orEmpty() else "" }
                 require(crypto.isPublicKey(id)) { "Некорректный публичный ID" }
-                require(host.isEmpty() || LanTransport.validEndpoint(host)) { "Укажите локальный IPv4-адрес, например 192.168.1.20" }
+                require(host.isEmpty() || LanTransport.validEndpoint(host) || TorTransport.validEndpoint(host)) { "Укажите локальный IPv4 или адрес .onion v3" }
                 val safeName = name.trim().take(40).ifEmpty { "Контакт ${id.take(5)}" }
                 mutate { old ->
                     require(old.identity != null && id != old.identity.publicKey) { "Нельзя добавить собственный ID" }
@@ -218,6 +225,7 @@ class Engine(
     override fun startCall(video: Boolean) {
         val target = mutable.value.selectedContact ?: return
         if (call != null) { error("Другой звонок уже открыт"); return }
+        if (vault.torEnabled || networkTransition) { error("WebRTC-звонки идут напрямую и отключены в режиме Tor, чтобы не раскрывать IP"); return }
         val session = CallSession(ByteArray(16).also { SecureRandom().nextBytes(it) }.b64(), target, video, false)
         call = session
         mutable.update { it.copy(call = CallView(target, false, video, "Откройте звонок в браузере")) }
@@ -293,6 +301,66 @@ class Engine(
         scope.launch { try { mutate { it.copy(relayEnabled = enabled) } } catch (_: Exception) { error("Не удалось сохранить настройку") } }
     }
 
+    override fun setNearby(enabled: Boolean) {
+        if (!isMobile && enabled) { error("Nearby доступен только на Android"); return }
+        scope.launch {
+            try {
+                mutate { it.copy(nearbyEnabled = enabled) }
+                if (enabled) startNearby() else stopNearby()
+            } catch (_: Exception) { error("Не удалось изменить настройки Nearby") }
+        }
+    }
+
+    private fun startNearby() {
+        if (nearby != null || mutable.value.panic || vault.identity == null || !vault.nearbyEnabled || vault.torEnabled) return
+        mutable.update { it.copy(nearbyStatus = "Запуск…") }
+        nearby = platform.startNearby(
+            { packet, hops -> runBlocking { receive(packet, hops) } },
+            { count, status -> mutable.update { it.copy(nearbyPeers = count, nearbyStatus = status) } },
+        )
+        if (nearby == null) mutable.update { it.copy(nearbyStatus = "Недоступно") }
+    }
+
+    private fun stopNearby() {
+        nearby?.close(); nearby = null
+        mutable.update { it.copy(nearbyPeers = 0, nearbyStatus = "Выключено") }
+    }
+
+    override fun setTor(enabled: Boolean) {
+        if (vault.torEnabled == enabled || networkTransition) return
+        // Block new sends before asynchronously changing the persistent policy.
+        networkTransition = true
+        scope.launch {
+            try {
+                if (enabled) call?.let { finishCall(it, false) }
+                transport?.close(); transport = null
+                stopNearby(); stopTor()
+                mutate { it.copy(torEnabled = enabled, controls = emptyList()) }
+                startNetwork()
+            } catch (_: Exception) { error("Не удалось изменить настройки Tor") }
+            finally { networkTransition = false }
+        }
+    }
+
+    private fun startTor() {
+        if (!vault.torEnabled || mutable.value.panic || tor != null) return
+        try {
+            val port = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { it.localPort }
+            torSocksPort = port
+            mutable.update { it.copy(torStatus = "Запуск Tor…", torOnion = "") }
+            tor = platform.startTor(listenPort, port) { onion, status ->
+                val safe = onion.takeIf { TorTransport.validEndpoint(it) }.orEmpty()
+                if (vault.torEnabled && !mutable.value.panic) mutable.update { it.copy(torOnion = safe, torStatus = status) }
+            }
+            if (tor == null) { torSocksPort = 0; mutable.update { it.copy(torStatus = "Tor недоступен") } }
+        } catch (_: Exception) { torSocksPort = 0; mutable.update { it.copy(torStatus = "Tor недоступен") } }
+    }
+
+    private fun stopTor() {
+        tor?.close(); tor = null; torSocksPort = 0
+        mutable.update { it.copy(torOnion = "", torStatus = "Выключено") }
+    }
+
     private suspend fun mutate(block: (Vault) -> Vault) = mutex.withLock {
         val next = block(vault)
         requireNotNull(store).write(json.encodeToString(next))
@@ -311,13 +379,15 @@ class Engine(
                 messages = current.messages.map { MessageView(it.id, it.contactId, it.text, it.outgoing, it.createdAt, it.expiresAt, it.pendingPacket != null, it.kind, it.durationMs) },
                 expirySeconds = current.expirySeconds,
                 relayEnabled = current.relayEnabled,
+                nearbyEnabled = current.nearbyEnabled,
+                torEnabled = current.torEnabled,
             )
         }
     }
 
     private fun startNetwork() {
         if (transport != null || mutable.value.panic || vault.identity == null) return
-        val candidate = LanTransport(listenPort) { packet, hops -> runBlocking { receive(packet, hops) } }
+        val candidate = LanTransport(listenPort, loopbackOnly = vault.torEnabled) { packet, hops -> runBlocking { receive(packet, hops) } }
         if (candidate.start()) {
             transport = candidate
             mutable.update { it.copy(networkAvailable = true) }
@@ -325,6 +395,7 @@ class Engine(
             candidate.close()
             mutable.update { it.copy(networkAvailable = false) }
         }
+        if (transport != null) { if (vault.torEnabled) startTor() else startNearby() }
     }
 
     private suspend fun receive(encoded: String, hops: Int): Boolean {
@@ -366,9 +437,7 @@ class Engine(
         if (relayed.contains(packet.id)) return true
         if (!inFlight.add(packet.id)) return false
         return try {
-            val addresses = snapshot.contacts.filter { it.id == packet.to }.map { it.address } +
-                snapshot.contacts.filter { it.id != packet.to && it.id != packet.from }.map { it.address }
-            val sent = addresses.filter { it.isNotBlank() }.distinct().take(4).any { LanTransport.send(it, encoded, hops - 1) }
+            val sent = transmit(snapshot, packet.to, packet.from, encoded, hops - 1)
             if (sent) {
                 if (relayed.size > MAX_SEEN) relayed.clear()
                 relayed.add(packet.id)
@@ -378,7 +447,7 @@ class Engine(
     }
 
     private fun canAcceptControl(from: String, content: Content): Boolean = when (content.kind) {
-        "call-offer" -> call == null
+        "call-offer" -> call == null && !vault.torEnabled
         "call-answer" -> call?.let { !it.incoming && it.contactId == from && it.id == content.callId && it.server != null } == true
         "call-end" -> call?.let { it.contactId == from && it.id == content.callId } == true
         else -> false
@@ -398,30 +467,47 @@ class Engine(
         }
     }
 
+    private fun transmit(snapshot: Vault, targetId: String, senderId: String?, encoded: String, hops: Int): Boolean {
+        if (mutable.value.panic || networkTransition || snapshot.torEnabled != vault.torEnabled) return false
+        val direct = snapshot.contacts.firstOrNull { it.id == targetId }?.address.orEmpty()
+        if (snapshot.torEnabled) {
+            if (torSocksPort == 0) return false
+            if (direct.isNotBlank() && TorTransport.send(direct, torSocksPort, encoded, hops)) return true
+            return snapshot.contacts.asSequence().filter { it.id != targetId && it.id != senderId }
+                .map { it.address }.filter { it.isNotBlank() && it != direct }.distinct().take(4)
+                .any { TorTransport.send(it, torSocksPort, encoded, hops) }
+        }
+        if (direct.isNotBlank() && LanTransport.send(direct, encoded, hops)) return true
+        if (nearby?.send(encoded, hops) == true) return true
+        return snapshot.contacts.asSequence().filter { it.id != targetId && it.id != senderId }
+            .map { it.address }.filter { it.isNotBlank() && it != direct }.distinct().take(4)
+            .any { LanTransport.send(it, encoded, hops) }
+    }
+
     private suspend fun retryPending() {
-        if (mutable.value.panic || transport == null) return
-        val snapshot = vault
-        val now = System.currentTimeMillis()
-        for (control in snapshot.controls.take(32)) {
-            if (mutable.value.panic) return
-            if (control.expiresAt <= now) continue
-            val target = snapshot.contacts.firstOrNull { it.id == control.contactId } ?: continue
-            val routes = listOf(target.address) + snapshot.contacts.filter { it.id != target.id }.map { it.address }
-            val sent = routes.filter { it.isNotBlank() }.distinct().take(5).any { LanTransport.send(it, control.packet) }
-            if (sent) try { mutate { old -> old.copy(controls = old.controls.filterNot { it.id == control.id }) } } catch (_: Exception) { }
-        }
-        for (message in snapshot.messages.filter { it.pendingPacket != null }.take(30)) {
-            if (mutable.value.panic) return
-            if (message.expiresAt != 0L && message.expiresAt <= now) continue
-            if (message.createdAt < now - 7L * 24 * 60 * 60 * 1000) continue
-            val target = snapshot.contacts.firstOrNull { it.id == message.contactId } ?: continue
-            val routes = listOf(target.address) + snapshot.contacts.filter { it.id != target.id }.map { it.address }
-            val sent = routes.filter { it.isNotBlank() }.distinct().take(5).any { LanTransport.send(it, message.pendingPacket!!) }
-            if (sent) {
-                try { mutate { old -> old.copy(messages = old.messages.map { if (it.id == message.id) it.copy(pendingPacket = null) else it }) } }
-                catch (_: Exception) { /* Retrying a delivered packet is safe: recipients deduplicate. */ }
+        if (mutable.value.panic || (transport == null && nearby == null) || !retryMutex.tryLock()) return
+        try {
+            val snapshot = vault
+            val now = System.currentTimeMillis()
+            for (control in snapshot.controls.take(32)) {
+                if (mutable.value.panic) return
+                if (control.expiresAt <= now) continue
+                val target = snapshot.contacts.firstOrNull { it.id == control.contactId } ?: continue
+                val sent = transmit(snapshot, target.id, null, control.packet, 3)
+                if (sent) try { mutate { old -> old.copy(controls = old.controls.filterNot { it.id == control.id }) } } catch (_: Exception) { }
             }
-        }
+            for (message in snapshot.messages.filter { it.pendingPacket != null }.take(30)) {
+                if (mutable.value.panic) return
+                if (message.expiresAt != 0L && message.expiresAt <= now) continue
+                if (message.createdAt < now - 7L * 24 * 60 * 60 * 1000) continue
+                val target = snapshot.contacts.firstOrNull { it.id == message.contactId } ?: continue
+                val sent = transmit(snapshot, target.id, null, message.pendingPacket!!, 3)
+                if (sent) {
+                    try { mutate { old -> old.copy(messages = old.messages.map { if (it.id == message.id) it.copy(pendingPacket = null) else it }) } }
+                    catch (_: Exception) { /* Retrying a delivered packet is safe: recipients deduplicate. */ }
+                }
+            }
+        } finally { retryMutex.unlock() }
     }
 
     private suspend fun cleanExpired() {
@@ -438,7 +524,7 @@ class Engine(
         val qr = QRCodeWriter().encode(value, BarcodeFormat.QR_CODE, 0, 0, mapOf(EncodeHintType.MARGIN to 2))
         QrGrid(qr.width, BooleanArray(qr.width * qr.height) { i -> qr[i % qr.width, i / qr.width] })
     } catch (_: Exception) { null }
-    override fun contactCard(): String = "vale1|${vault.identity?.publicKey.orEmpty()}|${mutable.value.localAddress}"
+    override fun contactCard(): String = "vale1|${vault.identity?.publicKey.orEmpty()}|${if (vault.torEnabled) mutable.value.torOnion else mutable.value.localAddress}"
     override fun formatTime(timestamp: Long): String = SimpleDateFormat("HH:mm", Locale.getDefault()).format(timestamp)
 
     override fun panic() {
@@ -447,6 +533,7 @@ class Engine(
         call = null
         synchronized(browserLock) { browser?.close(); browser = null }
         transport?.close(); transport = null
+        stopNearby(); stopTor()
         platform.clearCache()
         panicJob = scope.launch {
             try { mutate { it.copy(panicMode = true) }; platform.setDisguised(true) }
@@ -471,6 +558,7 @@ class Engine(
         call = null
         synchronized(browserLock) { browser?.close(); browser = null }
         transport?.close(); transport = null
+        stopNearby(); stopTor()
         scope.cancel()
         try { store?.close() } catch (_: Exception) { }
     }

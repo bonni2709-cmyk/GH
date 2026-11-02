@@ -87,10 +87,10 @@ internal fun AddContactDialog(controller: ValeController, existing: ContactView?
         title = { Text(if (existing == null) "Новый контакт" else "Изменить контакт", fontSize = 21.sp, fontWeight = FontWeight.SemiBold, color = Ink) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Добавьте друг друга и проверьте ID при личной встрече. Для связи нужны адреса в одной локальной сети.", color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
+                Text("Добавьте друг друга и проверьте ID при личной встрече. Используйте локальный IP, onion-адрес или Nearby на Android.", color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
                 OutlinedTextField(name, { if (it.length <= 40) name = it }, label = { Text("Имя") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
                 OutlinedTextField(id, { if (it.length <= 220) id = it }, label = { Text("Публичный ID или QR-код") }, modifier = Modifier.fillMaxWidth(), minLines = 2, maxLines = 3, shape = RoundedCornerShape(12.dp), readOnly = existing != null)
-                OutlinedTextField(address, { if (it.length <= 32) address = it }, label = { Text("Локальный IP (необязательно)") }, placeholder = { Text("192.168.1.20") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+                OutlinedTextField(address, { if (it.length <= 100) address = it }, label = { Text("Локальный IP или .onion") }, placeholder = { Text("192.168.1.20 или адрес.onion") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
                 if (existing == null) {
                     OutlinedButton(onClick = {
                         scanning = true; scanFailed = false

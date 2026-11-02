@@ -37,6 +37,8 @@ internal data class Vault(
     val expirySeconds: Long = 0,
     val relayEnabled: Boolean = false,
     val panicMode: Boolean = false,
+    val nearbyEnabled: Boolean = false,
+    val torEnabled: Boolean = false,
     val controls: List<PendingControl> = emptyList(),
 )
 
@@ -59,6 +61,13 @@ interface EncryptedStore {
     fun close()
 }
 
+interface NearbyLink {
+    fun send(packet: String, hops: Int): Boolean
+    fun close()
+}
+
+interface TorHandle { fun close() }
+
 interface PlatformBridge {
     val mobile: Boolean
     fun copyText(value: String)
@@ -67,6 +76,8 @@ interface PlatformBridge {
     fun setDisguised(enabled: Boolean)
     /** Opens only a user-initiated loopback media page in the system browser. */
     fun openLocalPage(url: String): Boolean = false
+    fun startNearby(onPacket: (String, Int) -> Boolean, onStatus: (Int, String) -> Unit): NearbyLink? = null
+    fun startTor(localPort: Int, socksPort: Int, onStatus: (String, String) -> Unit): TorHandle? = null
 }
 
 /** Encrypted application body; wire headers still contain only routing metadata. */

@@ -19,6 +19,7 @@ import chat.vale.ValeApp
 import chat.vale.core.Engine
 import chat.vale.core.Crypto
 import chat.vale.core.PlatformBridge
+import chat.vale.core.TorHandle
 import com.github.sarxos.webcam.Webcam
 import com.google.zxing.BinaryBitmap
 import com.google.zxing.MultiFormatReader
@@ -66,6 +67,9 @@ fun main(args: Array<String>) {
                 SwingUtilities.invokeLater { onResult(found) }
             }, "vale-qr-scanner").apply { isDaemon = true; start() }
         }
+        override fun startTor(localPort: Int, socksPort: Int, onStatus: (String, String) -> Unit): TorHandle? = try {
+            DesktopTor(localPort, socksPort, onStatus)
+        } catch (_: Exception) { onStatus("", "Tor недоступен"); null }
         override fun openLocalPage(url: String): Boolean = try {
             if (!Desktop.isDesktopSupported()) false else { Desktop.getDesktop().browse(URI(url)); true }
         } catch (_: Exception) { false }
@@ -104,5 +108,10 @@ private fun runtimeSelfTest() {
         try { check(reopened.read() == "runtime check") }
         finally { reopened.close() }
         check(!String(directory.resolve("vale.db").readBytes(), Charsets.ISO_8859_1).contains("runtime check"))
+        // The installer must also contain a usable, checksum-pinned Tor executable.
+        val tor = checkNotNull(packagedTorExecutable()) { "Tor bundle missing from app image" }
+        val process = ProcessBuilder(tor.absolutePath, "--version").directory(tor.parentFile)
+            .redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start()
+        check(process.waitFor(15, java.util.concurrent.TimeUnit.SECONDS) && process.exitValue() == 0) { "Tor executable failed" }
     } finally { directory.deleteRecursively() }
 }

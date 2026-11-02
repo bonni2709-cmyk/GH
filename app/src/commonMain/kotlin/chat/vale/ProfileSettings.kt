@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.sp
 
 @Composable
 internal fun ProfileScreen(controller: ValeController, state: ValeState) {
-    val qr = remember(state.publicId, state.localAddress) { controller.qrGrid(controller.contactCard()) }
+    val qr = remember(state.publicId, state.localAddress, state.torOnion, state.torEnabled) { controller.qrGrid(controller.contactCard()) }
     var copied by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize().background(CanvasColor).verticalScroll(rememberScrollState()).padding(28.dp), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.fillMaxWidth().widthIn(max = 760.dp)) {
@@ -46,7 +46,7 @@ internal fun ProfileScreen(controller: ValeController, state: ValeState) {
                     Spacer(Modifier.height(18.dp))
                     Text("Покажите этот код контакту", color = Ink, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     Spacer(Modifier.height(6.dp))
-                    Text("QR содержит публичный ID и локальный IP. Не публикуйте его, если не хотите делиться адресом.", color = Muted, fontSize = 11.sp, lineHeight = 17.sp, textAlign = TextAlign.Center)
+                    Text(if (state.torEnabled) "QR содержит публичный ID и адрес onion. Делитесь им только с доверенными контактами." else "QR содержит публичный ID и локальный IP. Не публикуйте его, если не хотите делиться адресом.", color = Muted, fontSize = 11.sp, lineHeight = 17.sp, textAlign = TextAlign.Center)
                     Spacer(Modifier.height(22.dp))
                     Column(Modifier.fillMaxWidth().background(CanvasColor, RoundedCornerShape(12.dp)).padding(14.dp)) {
                         SectionEyebrow("ПУБЛИЧНЫЙ ID")
@@ -58,7 +58,7 @@ internal fun ProfileScreen(controller: ValeController, state: ValeState) {
                         Icon(Icons.Outlined.ContentCopy, null, Modifier.size(17.dp)); Spacer(Modifier.width(8.dp)); Text(if (copied) "ID скопирован" else "Скопировать ID")
                     }
                     Spacer(Modifier.height(13.dp))
-                    Text("Локальный IP: ${state.localAddress.ifBlank { "не найден" }}  ·  порт 45454", color = Muted, fontSize = 11.sp)
+                    Text(if (state.torEnabled) "Tor: ${state.torOnion.ifBlank { state.torStatus }}" else "Локальный IP: ${state.localAddress.ifBlank { "не найден" }}  ·  порт 45454", color = Muted, fontSize = 11.sp)
                 }
             }
         }
@@ -94,6 +94,18 @@ internal fun SettingsScreen(controller: ValeController, state: ValeState) {
             SettingsCard {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
+                        Text("Только через Tor", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                        Spacer(Modifier.height(5.dp))
+                        Text("Передача только через собственный onion-сервис. Локальная сеть и Nearby отключаются; прямые WebRTC-звонки недоступны. ${state.torStatus}.", color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Switch(checked = state.torEnabled, onCheckedChange = controller::setTor)
+                }
+                Spacer(Modifier.height(15.dp))
+                HorizontalDivider(color = Line)
+                Spacer(Modifier.height(15.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
                         Text("Передавать сообщения через меня", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Ink)
                         Spacer(Modifier.height(5.dp))
                         Text("Только для контактов, добавленных на этом устройстве. Ретранслятор видит ID и сетевые метаданные, но не текст.", color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
@@ -104,14 +116,28 @@ internal fun SettingsScreen(controller: ValeController, state: ValeState) {
                 Spacer(Modifier.height(15.dp))
                 HorizontalDivider(color = Line)
                 Spacer(Modifier.height(15.dp))
+                if (controller.isMobile) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Связь поблизости", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                            Spacer(Modifier.height(5.dp))
+                            Text("Android Nearby использует Bluetooth и Wi‑Fi для связи без общей сети. Нужны разрешения и Google Play services. ${state.nearbyStatus}.", color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Switch(checked = state.nearbyEnabled, onCheckedChange = controller::setNearby, enabled = !state.torEnabled)
+                    }
+                    Spacer(Modifier.height(15.dp))
+                    HorizontalDivider(color = Line)
+                    Spacer(Modifier.height(15.dp))
+                }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Outlined.Wifi, null, tint = Sage, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
                         Text("Локальная сеть", color = Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                        Text("${state.localAddress.ifBlank { "IP не найден" }} · TCP 45454", color = Muted, fontSize = 11.sp)
+                        Text(if (state.torEnabled) state.torOnion.ifBlank { state.torStatus } else "${state.localAddress.ifBlank { "IP не найден" }} · TCP 45454", color = Muted, fontSize = 11.sp)
                     }
-                    StatusPill(if (state.networkAvailable) "ВКЛЮЧЕНА" else "НЕДОСТУПНА", state.networkAvailable)
+                    StatusPill(if (state.torEnabled) "TOR" else if (state.networkAvailable) "ВКЛЮЧЕНА" else "НЕДОСТУПНА", state.networkAvailable)
                 }
             }
             Spacer(Modifier.height(22.dp))
@@ -137,7 +163,7 @@ internal fun SettingsScreen(controller: ValeController, state: ValeState) {
                 Row(verticalAlignment = Alignment.Top) {
                     Icon(Icons.Outlined.Info, null, tint = Sage, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(10.dp))
-                    Text("Vale — экспериментальный прототип без аудита. Нет Tor/VPN, Bluetooth/Nearby, звонков, медиа и стикеров. IP и публичные ID видны участникам сети; прямое соединение не анонимно. Нет гарантии безопасного удаления или защиты от доступа к разблокированному устройству.", color = Muted, fontSize = 12.sp, lineHeight = 19.sp)
+                    Text("Vale не проходил аудит. Прямые звонки и локальная сеть раскрывают сетевые адреса; Tor не гарантирует абсолютную анонимность. Нет forward secrecy, гарантии безопасного удаления или защиты от доступа к разблокированному устройству.", color = Muted, fontSize = 12.sp, lineHeight = 19.sp)
                 }
             }
             Spacer(Modifier.height(32.dp))

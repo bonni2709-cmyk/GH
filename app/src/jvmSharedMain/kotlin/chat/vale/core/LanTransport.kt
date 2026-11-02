@@ -20,6 +20,7 @@ internal const val MAX_PACKET_SIZE = 1_600_000
 /** Direct, bounded TCP transport. It deliberately accepts only literal private IPv4 addresses. */
 internal class LanTransport(
     private val port: Int = DEFAULT_PORT,
+    private val loopbackOnly: Boolean = false,
     private val onPacket: (String, Int) -> Boolean,
 ) {
     private var server: ServerSocket? = null
@@ -28,7 +29,7 @@ internal class LanTransport(
     fun start(): Boolean = try {
         val listener = ServerSocket().apply {
             reuseAddress = true
-            bind(InetSocketAddress(port))
+            bind(if (loopbackOnly) InetSocketAddress(InetAddress.getByName("127.0.0.1"), port) else InetSocketAddress(port))
         }
         server = listener
         Thread({
@@ -51,7 +52,8 @@ internal class LanTransport(
     private fun handle(socket: Socket) {
         try {
             socket.use {
-                it.soTimeout = 12_000
+                // Bound slow/partial inbound frames; longer outbound waits cover relays.
+                it.soTimeout = 8_000
                 val input = DataInputStream(it.getInputStream())
                 val length = input.readInt()
                 if (length !in 1..MAX_PACKET_SIZE) return
@@ -82,7 +84,7 @@ internal class LanTransport(
             return try {
                 Socket().use { socket ->
                     socket.connect(endpoint, 2_000)
-                    socket.soTimeout = 12_000
+                    socket.soTimeout = 180_000
                     DataOutputStream(socket.getOutputStream()).apply {
                         writeInt(bytes.size); writeByte(hops); write(bytes); flush()
                     }

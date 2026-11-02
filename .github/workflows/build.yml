@@ -48,6 +48,18 @@ jobs:
         run: |
           $wix = Get-ChildItem "${env:ProgramFiles(x86)}\WiX Toolset v3*\bin" -Directory -ErrorAction SilentlyContinue | Select-Object -First 1
           if ($wix) { $wix.FullName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append }
+      - name: Include verified Tor Expert Bundle (Windows)
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          $bundle = "$env:RUNNER_TEMP\tor-expert-bundle.tar.gz"
+          Invoke-WebRequest -Uri "https://archive.torproject.org/tor-package-archive/torbrowser/15.0.25/tor-expert-bundle-windows-x86_64-15.0.25.tar.gz" -OutFile $bundle
+          $expected = "c1988c701de2f24f7d098d1d6d7f507b58f27740d097f29c246e0524d639b252"
+          if ((Get-FileHash -Algorithm SHA256 $bundle).Hash.ToLowerInvariant() -ne $expected) { throw "Tor Expert Bundle checksum mismatch" }
+          New-Item -ItemType Directory -Force "app/packaging/windows/tor-bundle" | Out-Null
+          tar -xzf $bundle -C "app/packaging/windows/tor-bundle"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Get-ChildItem "app/packaging/windows/tor-bundle" -Filter tor.exe -Recurse | Select-Object -First 1)) { throw "tor.exe missing from bundle" }
       - name: Build Android debug APK
         if: matrix.target == 'android'
         shell: bash

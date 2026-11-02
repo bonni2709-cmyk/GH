@@ -37,6 +37,12 @@ data class ValeState(
     val selectedContact: String? = null,
     val expirySeconds: Long = 0,
     val relayEnabled: Boolean = false,
+    val nearbyEnabled: Boolean = false,
+    val nearbyPeers: Int = 0,
+    val nearbyStatus: String = "Выключено",
+    val torEnabled: Boolean = false,
+    val torOnion: String = "",
+    val torStatus: String = "Выключено",
     val networkAvailable: Boolean = false,
     val panic: Boolean = false,
     val call: CallView? = null,
@@ -62,6 +68,8 @@ interface ValeController {
     fun endCall()
     fun setExpiry(seconds: Long)
     fun setRelay(enabled: Boolean)
+    fun setNearby(enabled: Boolean)
+    fun setTor(enabled: Boolean)
     fun copyText(value: String)
     fun scanQr(onResult: (String?) -> Unit)
     fun qrGrid(value: String): QrGrid?

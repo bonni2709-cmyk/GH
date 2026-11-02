@@ -1,5 +1,6 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import java.security.MessageDigest
 
 plugins {
     kotlin("multiplatform")
@@ -8,6 +9,24 @@ plugins {
     id("org.jetbrains.compose")
     id("com.android.application")
 }
+
+// Extract only the native libraries from the pinned AAR. TorService is built
+// from the corresponding Java sources with this project's JDK 17 toolchain.
+val torAndroidBinary by configurations.creating { isTransitive = false }
+dependencies { add(torAndroidBinary.name, "info.guardianproject:tor-android:0.4.9.14@aar") }
+val unpackTorNative by tasks.registering(Copy::class) {
+    from({ zipTree(torAndroidBinary.singleFile) }) {
+        include("jni/**")
+        eachFile { path = path.removePrefix("jni/") }
+        includeEmptyDirs = false
+    }
+    into(layout.buildDirectory.dir("generated/valeTor/jniLibs"))
+    doFirst {
+        val hash = MessageDigest.getInstance("SHA-256").digest(torAndroidBinary.singleFile.readBytes()).joinToString("") { "%02x".format(it) }
+        check(hash == "28ff2bb6d4d42eabe57183dedd7a97fce77e8ce4b6f5af6fa03993b3ca054edd") { "Tor Android AAR checksum mismatch" }
+    }
+}
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }.configureEach { dependsOn(unpackTorNative) }
 
 kotlin {
     androidTarget {
@@ -44,6 +63,9 @@ kotlin {
                 implementation("net.zetetic:sqlcipher-android:4.12.0@aar")
                 implementation("androidx.sqlite:sqlite:2.5.0")
                 implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+                implementation("com.google.android.gms:play-services-nearby:19.5.0")
+                implementation("info.guardianproject:jtorctl:0.4.5.7")
+                implementation("androidx.localbroadcastmanager:localbroadcastmanager:1.1.0")
             }
         }
         val desktopMain by getting {
@@ -80,6 +102,8 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    sourceSets.getByName("main").java.srcDir("src/androidMain/java")
+    sourceSets.getByName("main").jniLibs.srcDir(layout.buildDirectory.dir("generated/valeTor/jniLibs"))
     packaging.resources.excludes += setOf("META-INF/AL2.0", "META-INF/LGPL2.1", "META-INF/LICENSE*")
 }
 
@@ -88,6 +112,7 @@ compose.desktop {
         mainClass = "chat.vale.desktop.MainKt"
         nativeDistributions {
             targetFormats(TargetFormat.Exe)
+            appResourcesRootDir.set(project.layout.projectDirectory.dir("packaging"))
             // JDBC, JNA and webcam capture use JDK modules not auto-detected by jpackage.
             modules("java.sql", "java.naming", "java.management", "jdk.unsupported")
             packageName = "Vale"
