@@ -10,11 +10,15 @@ adb shell am start -W -n chat.vale.app/chat.vale.android.MainActivity
 # Wait for the non-backup directory and Android Keystore-wrapped SQLCipher key.
 ready=0
 for _ in {1..30}; do
-    if adb shell run-as chat.vale.app sh -c 'test -s no_backup/vault.key && test -s no_backup/vale.db' 2>/dev/null; then ready=1; break; fi
+    if adb shell run-as chat.vale.app ls no_backup/vault.key >/dev/null 2>&1 && \
+       adb shell run-as chat.vale.app ls no_backup/vale.db >/dev/null 2>&1; then ready=1; break; fi
     sleep 2
 done
 if [[ $ready != 1 ]]; then
     echo 'Android vault did not initialize' >&2
+    adb shell run-as chat.vale.app ls -la no_backup || true
+    adb shell uiautomator dump /sdcard/vale-failure.xml || true
+    adb exec-out cat /sdcard/vale-failure.xml || true
     adb logcat -d -s AndroidRuntime:E System.err:W | tail -100 || true
     exit 1
 fi
