@@ -254,6 +254,18 @@
   /* ------------------------------------------------------------ навигация */
   App.go = function (t, opts) {
     opts = opts || {};
+    // выход за границу страниц тома — это переход к соседнему тому
+    if (t > App.total && App.volumeIdx < App.volumes.length - 1) {
+      App.setVolume(App.volumeIdx + 1);
+      App.go(1, { instant: opts.instant });
+      return;
+    }
+    if (t < 1 && App.volumeIdx > 0) {
+      var pv = App.volumeIdx - 1;
+      App.setVolume(pv);
+      App.go(App.total, { instant: opts.instant });
+      return;
+    }
     t = Math.max(1, Math.min(App.total, t));
     if (App.busy) {
       clearTimeout(App._busyTimer);
@@ -428,6 +440,8 @@
     }
     const ttlTop = $('#hud-vol-name');
     if (ttlTop) ttlTop.textContent = 'ТОМ ' + String(App.volume.id).padStart(2, '0') + ' · ' + App.volume.title;
+    document.title = 'ПРОЕКТ-ГЕНЕЗИС · Том ' + String(App.volume.id).padStart(2, '0') +
+      ' «' + App.volume.title + '» · стр. ' + App.page;
     // маркеры страниц под текущий том
     const marks = $('#page-marks');
     if (marks && marks.childElementCount !== App.total) {

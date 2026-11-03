@@ -809,7 +809,7 @@
 
       /* 07 */
       {
-        set: 'reactor', tone: 'violet', cam: { x: 600, y: 880, z: 1.0 }, flash: '#cbb6ff', flashA: 0.28, setOpts: { seed: 907, broken: true },
+        set: 'reactor', tone: 'violet', cam: { x: 600, y: 880, z: 1.0 }, flash: '#cbb6ff', flashA: 0.24, flashR: 520, setOpts: { seed: 907, broken: true },
         cast: [C('quantum', 520, 1300, 1.06, { rim: '#b9a6ff', sparks: true }), C('hunter', 700, 1310, 1.0, { rim: '#7fe9ff' })],
         fx: [{ kind: 'rings', x: 600, y: 980, n: 7, step: 90, color: '#b9a6ff', a: 0.3 }],
         text: [
@@ -958,7 +958,7 @@
 
       /* 20 */
       {
-        set: 'shaft', tone: 'violet', cam: { x: 600, y: 900, z: 0.86 }, flash: '#cbb6ff', flashA: 0.22, setOpts: { seed: 920 },
+        set: 'shaft', tone: 'violet', cam: { x: 600, y: 900, z: 0.86 }, flash: '#cbb6ff', flashA: 0.2, flashR: 480, setOpts: { seed: 920 },
         cast: [C('quantum', 600, 1290, 1.08, { rim: '#b9a6ff', bleed: true })],
         fx: [{ kind: 'burst', x: 600, y: 1000, r: 420, n: 26, color: '#b9a6ff', a: 0.4 }],
         text: [
@@ -1105,7 +1105,7 @@
 
       /* 12 */
       {
-        set: 'reactor', tone: 'green', cam: { x: 600, y: 880, z: 1.0 }, flash: '#c8ff3d', flashA: 0.24, setOpts: { seed: 1012, broken: true },
+        set: 'reactor', tone: 'green', cam: { x: 600, y: 880, z: 1.0 }, flash: '#c8ff3d', flashA: 0.22, flashR: 520, setOpts: { seed: 1012, broken: true },
         cast: [C('krakentaus', 520, 1300, 1.1, { rim: '#c8ff3d', tentacles: 6 }), C('hunter', 820, 1310, 1.0, { flip: true })],
         fx: [{ kind: 'rings', x: 600, y: 1000, n: 8, step: 90, color: '#9ef01a', a: 0.25 }],
         text: [
@@ -1161,7 +1161,7 @@
 
       /* 17 */
       {
-        set: 'reactor', tone: 'green', cam: { x: 600, y: 880, z: 0.86 }, flash: '#eaffc8', flashA: 0.34, setOpts: { seed: 1017, broken: true, fog: 1.8 },
+        set: 'reactor', tone: 'green', cam: { x: 600, y: 880, z: 0.86 }, flash: '#eaffc8', flashA: 0.28, flashR: 620, setOpts: { seed: 1017, broken: true, fog: 1.8 },
         cast: [C('hunter', 400, 1350, 1.06, { rim: '#c8ff3d' })],
         fx: [{ kind: 'rings', x: 600, y: 900, n: 10, step: 100, color: '#c8ff3d', a: 0.3 }, { kind: 'burst', x: 600, y: 900, r: 700, n: 34, color: '#eaffc8', a: 0.4 }],
         text: [

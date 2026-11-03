@@ -239,7 +239,14 @@
       g.add(PG.speckles({ x0: 0, y0: 0, x1: W, y1: H, count: 40, seed: seed + 3, color: '#dff6ff', minA: 0.01, maxA: 0.05, minR: 0.4, maxR: 1.3 }));
     }
     if (s.flash) {
-      g.add(PG.rect(0, 0, W, H, s.flash, { opacity: s.flashA == null ? 0.35 : s.flashA }));
+      // вспышка — световое пятно в центре кадра, а не белесая заливка листа
+      const r = s.flashR || 520;
+      const a = s.flashA == null ? 0.3 : s.flashA;
+      g.add(PG.circle(W / 2, H * 0.52, r, undefined, PG.radial(r, [
+        0, PG.rgba(s.flash, a),
+        0.55, PG.rgba(s.flash, a * 0.35),
+        1, PG.rgba(s.flash, 0)
+      ])));
     }
     if (s.frame !== false) {
       g.add(PG.rect(26, 26, W - 52, H - 52, undefined, { stroke: 'rgba(157,246,255,0.14)', strokeWidth: 2 }));

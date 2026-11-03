@@ -279,7 +279,7 @@
 
       /* 20 */
       {
-        set: 'reactor', tone: 'amber', cam: { x: 600, y: 880, z: 0.86 }, flash: '#fff6e0', flashA: 0.42,
+        set: 'reactor', tone: 'amber', cam: { x: 600, y: 880, z: 0.86 }, flash: '#fff6e0', flashA: 0.3, flashR: 520,
         setOpts: { seed: 120, broken: true, fog: 1.4 },
         cast: [C('hunter', 300, 1330, 1.15, { rot: -26, rim: '#ffe08a' })],
         fx: [{ kind: 'rings', x: 600, y: 760, n: 9, step: 90, color: '#ffe08a', a: 0.3 }, { kind: 'burst', x: 600, y: 760, r: 620, n: 30, color: '#fff6e0', a: 0.45 }],
@@ -302,7 +302,7 @@
 
       /* 01 */
       {
-        set: 'reactor', tone: 'amber', cam: { x: 600, y: 900, z: 0.88 }, flash: '#ffcf8a', flashA: 0.3,
+        set: 'reactor', tone: 'amber', cam: { x: 600, y: 900, z: 0.88 }, flash: '#ffcf8a', flashA: 0.26, flashR: 560,
         setOpts: { seed: 201, broken: true, fog: 1.5 },
         prop: [P('debris', 400, 1400)],
         fx: [{ kind: 'ash', n: 120, seed: 3 }],
@@ -1221,7 +1221,7 @@
 
       /* 20 */
       {
-        set: 'sonar', tone: 'red', cam: { x: 600, y: 880, z: 0.86 }, flash: '#ff9a8f', flashA: 0.22, setOpts: { seed: 520 },
+        set: 'sonar', tone: 'red', cam: { x: 600, y: 880, z: 0.86 }, flash: '#ff9a8f', flashA: 0.2, flashR: 480, setOpts: { seed: 520 },
         cast: [C('lyra', 520, 1300, 1.1, { rim: '#ff9a8f', sonar: true })],
         fx: [{ kind: 'burst', x: 600, y: 560, r: 420, n: 24, color: '#ff3d33', a: 0.3 }],
         text: [
