@@ -107,7 +107,10 @@
     nullar: { base: '#b99a8c', shade: '#8d7062', light: '#dcc0ae' },
     guard: { base: '#9c8271', shade: '#77604f', light: '#bda18d' },
     doctor: { base: '#c4ab97', shade: '#9a8573', light: '#e0cbb9' },
-    woman: { base: '#d2ae96', shade: '#a9856d', light: '#eed0b6' }
+    woman: { base: '#d2ae96', shade: '#a9856d', light: '#eed0b6' },
+    wei: { base: '#d8b79c', shade: '#ab8569', light: '#f0d3b8' },
+    tech: { base: '#8f7a68', shade: '#6a5748', light: '#ab9380' },
+    kraken: { base: '#b08a72', shade: '#856251', light: '#cfa78c' }
   };
 
   /* --------------------------------------------------------------- пропорции */
@@ -128,7 +131,7 @@
   function skeleton(st) {
     const lean = st.lean || 0;             // наклон корпуса (рад, + вперёд)
     const crouch = st.crouch || 0;         // 0..1 присед
-    const hip = { x: st.x + (st.hipShift || 0), y: st.y + BONE.pelvisY + crouch * 40 };
+    const hip = { x: st.x + (st.hipShift || 0), y: st.y + BONE.pelvisY + crouch * 40 + (st.drop || 0) };
 
     const spineDir = -Math.PI / 2 + lean;
     const chest = polar(hip, spineDir, BONE.spine - crouch * 26);
@@ -461,8 +464,15 @@
         data: 'M' + r(s.head.x - R * 0.5) + ' ' + r(s.head.y - R * 0.1) + 'C' + r(s.head.x - R * 0.2) + ' ' + r(s.head.y + R * 0.6) + ' ' + r(s.head.x + R * 0.4) + ' ' + r(s.head.y + R * 0.5) + ' ' + r(s.head.x + R * 0.6) + ' ' + r(s.head.y + R * 0.1),
         stroke: skin.shade, strokeWidth: 8, opacity: 0.35, lineCap: 'round'
       }));
+      // контровой свет по контуру головы — фигура сразу «отрывается» от фона
+      layerHead.add(make({
+        data: smooth(skull.map(function (q) { return { x: q.x, y: q.y }; }), true, 0.9),
+        stroke: o.rimLight || 'rgba(157,246,255,0.55)',
+        strokeWidth: 3.2, opacity: 0.55
+      }));
+
       // волосы / капюшон
-      if (variant === 'hunter' || variant === 'guard') {
+      if (variant === 'hunter' || variant === 'guard' || variant === 'tech') {
         const hair = [];
         for (let i = 0; i < 12; i++) {
           const a = -Math.PI * 0.95 + i / 11 * Math.PI * 0.95;
@@ -470,6 +480,52 @@
         }
         hair.push({ x: s.head.x - R * 0.05, y: s.head.y - R * 0.55 });
         layerHead.add(make({ data: smooth(hair, true, 0.7), fill: '#1a1a1e', stroke: ink, strokeWidth: 2 }));
+      }
+      // борода — только у Кракентауса
+      if (variant === 'kraken') {
+        // щетина по челюсти: ниже скул, лицо остаётся открытым
+        layerHead.add(make({
+          data: smooth([
+            { x: s.head.x - R * 0.78, y: s.head.y + R * 0.24 },
+            { x: s.head.x - R * 0.6, y: s.head.y + R * 0.78 },
+            { x: s.head.x - R * 0.18, y: s.head.y + R * 1.04 },
+            { x: s.head.x + R * 0.3, y: s.head.y + R * 1.0 },
+            { x: s.head.x + R * 0.66, y: s.head.y + R * 0.7 },
+            { x: s.head.x + R * 0.8, y: s.head.y + R * 0.2 },
+            { x: s.head.x + R * 0.52, y: s.head.y + R * 0.44 },
+            { x: s.head.x + R * 0.05, y: s.head.y + R * 0.56 },
+            { x: s.head.x - R * 0.46, y: s.head.y + R * 0.42 }
+          ], true, 0.6), fill: '#3b3733', stroke: ink, strokeWidth: 1.8, opacity: 0.95
+        }));
+        // залысина + седой вихрь
+        layerHead.add(make({
+          data: 'M' + r(s.head.x - R * 0.2) + ' ' + r(s.head.y - R * 0.92) +
+            ' C' + r(s.head.x + R * 0.3) + ' ' + r(s.head.y - R * 1.0) + ' ' + r(s.head.x + R * 0.8) + ' ' + r(s.head.y - R * 0.6) +
+            ' ' + r(s.head.x + R * 0.86) + ' ' + r(s.head.y - R * 0.1),
+            stroke: '#6d6a66', strokeWidth: 5, opacity: 0.5, lineCap: 'round'
+        }));
+      }
+      // собранные назад волосы доктора Вэй
+      if (variant === 'wei' || variant === 'woman' || variant === 'doctor') {
+        layerHead.add(make({
+          data: smooth([
+            { x: s.head.x - R * 1.02, y: s.head.y + R * 0.05 },
+            { x: s.head.x - R * 0.86, y: s.head.y - R * 0.86 },
+            { x: s.head.x - R * 0.1, y: s.head.y - R * 1.14 },
+            { x: s.head.x + R * 0.66, y: s.head.y - R * 0.9 },
+            { x: s.head.x + R * 0.6, y: s.head.y - R * 0.42 },
+            { x: s.head.x - R * 0.05, y: s.head.y - R * 0.66 },
+            { x: s.head.x - R * 0.6, y: s.head.y - R * 0.5 }
+          ], true, 0.55), fill: '#241a1c', stroke: ink, strokeWidth: 2
+        }));
+        // узел волос сзади
+        layerHead.add(make({
+          data: smooth([
+            { x: s.head.x - R * 1.16, y: s.head.y - R * 0.22 },
+            { x: s.head.x - R * 0.9, y: s.head.y - R * 0.5 },
+            { x: s.head.x - R * 0.76, y: s.head.y - R * 0.1 }
+          ], true, 0.7), fill: '#1b1315', stroke: ink, strokeWidth: 1.8
+        }));
       }
       if (variant === 'nullar') {
         // зачёсанные волосы + высокий воротник
@@ -491,6 +547,17 @@
             { x: s.neckBase.x + 27, y: s.neckBase.y - 18 },
             { x: s.neckBase.x + 30, y: s.neckBase.y + 10 }
           ], true, 0.5), fill: '#221a33', stroke: ink, strokeWidth: 2.4
+        }));
+      }
+
+      if (variant === 'guard') {
+        layerHead.add(make({
+          data: 'M' + r(s.head.x - R * 1.04) + ' ' + r(s.head.y - R * 0.34) +
+            ' C' + r(s.head.x - R * 0.9) + ' ' + r(s.head.y - R * 1.16) + ' ' + r(s.head.x + R * 0.6) + ' ' + r(s.head.y - R * 1.2) +
+            ' ' + r(s.head.x + R * 0.82) + ' ' + r(s.head.y - R * 0.42) +
+            ' L' + r(s.head.x + R * 1.16) + ' ' + r(s.head.y - R * 0.22) +
+            ' L' + r(s.head.x + R * 0.5) + ' ' + r(s.head.y - R * 0.3) + ' Z',
+          fill: '#131a1e', stroke: ink, strokeWidth: 2.2
         }));
       }
 
@@ -565,6 +632,17 @@
         return { lean: -0.34, crouch: 0.2, headTilt: -0.3, hipShift: -12,
           handL: { x: 130, y: -240 }, handR: { x: -60, y: -220 },
           footL: { x: 40, y: 0 }, footR: { x: -58, y: 8 } };
+      },
+      sit: function () {
+        // таз опущен на сиденье, колени вперёд, стопы под коленями
+        return { lean: 0.16, crouch: 0.3, drop: 96, headTilt: 0.02, hipShift: 4,
+          handL: { x: 104, y: -206 }, handR: { x: 30, y: -196 },
+          footL: { x: 74, y: -6 }, footR: { x: 30, y: 2 } };
+      },
+      lean: function () {
+        return { lean: 0.2, crouch: 0.1, headTilt: 0.12, hipShift: 4,
+          handL: { x: 70, y: -300 }, handR: { x: -46, y: -252 },
+          footL: { x: 44, y: 0 }, footR: { x: -54, y: 0 } };
       },
       down: function () {
         return { lean: -0.7, crouch: 1, headTilt: -0.4, hipShift: -20,

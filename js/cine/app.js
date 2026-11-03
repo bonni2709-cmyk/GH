@@ -106,9 +106,13 @@
   };
 
   /* ------------------------------------------------------------- сцена */
+  App.pages = function () { return Cine.VOL1 || [Cine.buildChapter1Page5]; };
+
   App.loadPage = function (index) {
-    const pages = [Cine.buildChapter1Page5];
-    const make = pages[Math.max(0, Math.min(pages.length - 1, index))];
+    const pages = App.pages();
+    const i = Math.max(0, Math.min(pages.length - 1, index));
+    const make = pages[i];
+    if (!make) return null;
     const page = make(App.engine);
     App.page = page;
     App.layer.destroyChildren();
@@ -117,13 +121,46 @@
     App.buildText(page.data || Cine.CH1_P5);
     Cine.FX.clear();
     killParticles(App.particles);
-    App.pageIndex = index;
+    App.pageIndex = i;
+    App.pageT = 0;
+    App.updateHud();
+    return page;
+  };
+
+  App.goto = function (delta) {
+    const n = App.pages().length;
+    const next = Math.max(0, Math.min(n - 1, App.pageIndex + delta));
+    if (next === App.pageIndex) return;
+    App.loadPage(next);
+    App.fit();
+  };
+
+  App.updateHud = function () {
+    const page = App.page;
+    if (!page) return;
+    const d = page.data || {};
+    const set = function (id, v) { const el = document.getElementById(id); if (el && v != null) el.textContent = v; };
+    set('hud-vol', 'Том ' + (d.vol || 1));
+    set('hud-page', 'Страница ' + (d.page || 1));
+    set('hud-title', d.title || '');
+    set('hud-place', d.place || '');
+    const total = App.pages().length;
+    set('hud-counter', (App.pageIndex + 1) + ' / ' + total);
+    const bar = document.getElementById('progress');
+    if (bar) bar.style.width = ((App.pageIndex + 1) / total * 100) + '%';
   };
 
   App.fire = function () {
-    if (!App.page) return;
-    App.page.fire(App.engine, App.shotIndex = ((App.shotIndex || 0) + 1) % Cine.CH1_P5.hits.length);
-    if ((App.shotIndex % 3) === 0) App.page.hitGuard(App.engine);
+    const page = App.page;
+    if (!page || typeof page.fire !== 'function') {
+      // у страницы нет выстрела — просто тряхнём камеру
+      Cine.Shake.kick(10);
+      return;
+    }
+    const hits = (page.data && page.data.hits) || Cine.CH1_P5.hits;
+    App.shotIndex = ((App.shotIndex || 0) + 1) % hits.length;
+    page.fire(App.engine, App.shotIndex);
+    if (typeof page.hitGuard === 'function' && (App.shotIndex % 3) === 0) page.hitGuard(App.engine);
   };
 
   /* ------------------------------------------------------------- цикл */
@@ -134,12 +171,13 @@
     if (App.page) {
       Cine.FX.step(dt);
       Cine.FX.draw();
+      if (typeof App.page.tick === 'function') App.page.tick(App.t);
       Cine.Shake.update(dt);
       if (Cine.Shake.amp > 0) App.applyCamera();
       else if (Cine.Shake.wasShaking) { Cine.Shake.wasShaking = false; App.applyCamera(); }
       Cine.Shake.wasShaking = Cine.Shake.amp > 0;
       // автоматическая очередь: раз в 1.6 с
-      if (App.autoFire && App.t - (App.lastShot || 0) > 1600) {
+      if (App.autoFire && typeof App.page.fire === 'function' && App.t - (App.lastShot || 0) > 1600) {
         App.lastShot = App.t;
         App.fire();
       }
@@ -209,10 +247,24 @@
       if (e.code === 'Space') { e.preventDefault(); App.fire(); }
       if (e.key === 'f') App.fit();
       if (e.key === 'a') App.autoFire = !App.autoFire;
+      if (e.key === 'ArrowRight' || e.key === 'PageDown') App.goto(1);
+      if (e.key === 'ArrowLeft' || e.key === 'PageUp') App.goto(-1);
+      if (e.key === 'Home') App.goto(-App.pageIndex);
+      if (e.key === 'End') App.goto(999);
     });
 
-    document.getElementById('btn-fire').addEventListener('click', function () { App.fire(); });
-    document.getElementById('btn-fit').addEventListener('click', App.fit);
+    const bind = function (id, fn) { const el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
+    bind('btn-fire', function () { App.fire(); });
+    bind('btn-fit', App.fit);
+    bind('btn-prev', function () { App.goto(-1); });
+    bind('btn-next', function () { App.goto(1); });
+    // свайп
+    let sx = 0, sy = 0, moved = false;
+    wrap.addEventListener('pointerdown', function (e) { sx = e.clientX; sy = e.clientY; moved = false; });
+    wrap.addEventListener('pointerup', function (e) {
+      const dx = e.clientX - sx, dy = e.clientY - sy;
+      if (Math.abs(dx) > 80 && Math.abs(dy) < 60) App.goto(dx < 0 ? 1 : -1);
+    });
 
     requestAnimationFrame(frame);
   };

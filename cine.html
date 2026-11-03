@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ПРОЕКТ-ГЕНЕЗИС · Том 1, Страница 5 — перестрелка в коридоре B</title>
-<meta name="description" content="Кинематографичный комикс на Konva.js: люди нарисованы кривыми Безье, обломки — на Matter.js, искры — на tsParticles, тряска экрана.">
+<title>ПРОЕКТ-ГЕНЕЗИС · Том 1 «Дно» — 10 страниц</title>
+<meta name="description" content="Кинематографичный комикс на Konva.js: люди нарисованы кривыми Безье, обломки — на Matter.js, искры — на tsParticles, тряска экрана. Том 1 целиком.">
 <link rel="stylesheet" href="cine.css">
 </head>
 <body>
@@ -12,11 +12,23 @@
 
   <header class="top">
     <div class="brand">ПРОЕКТ-ГЕНЕЗИС<small>подводный атомный техно-триллер</small></div>
-    <div class="chapter">Том 1 · <b>Страница 5</b> · Коридор B</div>
+    <div class="chapter">
+      <span id="hud-vol">Том 1</span> ·
+      <b id="hud-page">Страница 1</b> ·
+      <span id="hud-title">Спуск</span> ·
+      <span class="chapter__place" id="hud-place">Тихий океан</span>
+    </div>
     <div class="spacer"></div>
+    <div class="pager">
+      <button class="btn btn--icon" id="btn-prev" type="button" aria-label="Предыдущая страница">←</button>
+      <span class="pager__count" id="hud-counter">1 / 10</span>
+      <button class="btn btn--icon" id="btn-next" type="button" aria-label="Следующая страница">→</button>
+    </div>
     <button class="btn btn--fire" id="btn-fire" type="button">Выстрел · Space</button>
     <button class="btn" id="btn-fit" type="button">FIT · F</button>
   </header>
+
+  <div class="progress"><i id="progress"></i></div>
 
   <main id="stage-wrap">
     <div id="stage"></div>
@@ -29,6 +41,8 @@
     <span><kbd>колесо</kbd> зум</span>
     <span class="sep">/</span>
     <span><kbd>перетаскивание</kbd> панорама</span>
+    <span class="sep">/</span>
+    <span><kbd>←</kbd><kbd>→</kbd> страницы</span>
     <span class="sep">/</span>
     <span><kbd>Space</kbd> выстрел</span>
     <span class="sep">/</span>
@@ -52,7 +66,10 @@
 <script src="js/cine/rig.js"></script>
 <script src="js/cine/stage.js"></script>
 <script src="js/cine/fx.js"></script>
+<script src="js/cine/scene.js"></script>
+<script src="js/cine/sets.js"></script>
 <script src="js/cine/chapter1.js"></script>
+<script src="js/cine/vol1.js"></script>
 <script src="js/cine/app.js"></script>
 
 <script>
