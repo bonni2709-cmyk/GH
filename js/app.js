@@ -38,15 +38,32 @@
   }
 
   App.pageData = function (t) {
-    if (App.allPages && App.allPages[t]) return App.allPages[t];
-    return App.data[0].pages[Math.max(0, Math.min(9, t - 1))];
+    return App.volume.index[t];
+  };
+
+  /** переключение тома */
+  App.setVolume = function (i) {
+    i = Math.max(0, Math.min(App.volumes.length - 1, i));
+    App.volumeIdx = i;
+    App.volume = App.volumes[i];
+    App.total = App.volume.pages.length;
+    App.page = 1;
+    App.volume.index = App.volume.index || {};
+    App.volume.pages.forEach(function (p) {
+      App.volume.index[p.n] = PG.compilePage(p);
+    });
+    buildIndex();
+    $('#index-vol-title') && ($('#index-vol-title').textContent =
+      'Том ' + String(App.volume.id).padStart(2, '0') + ' · ' + App.volume.title + ' — ' + App.volume.pages.length + ' страниц');
+    App.go(1, { instant: true });
+    document.body.classList.add('reading');
   };
 
   /* --------------------------------------------------------------- рендеринг */
   function buildScene(t) {
     const data = App.pageData(t);
     if (App.pageGfx) App.pageGfx.destroy();
-    const g = PG.S[data.scene] ? PG.S[data.scene]() : PG.S.p01();
+    const g = PG.renderPage(App.volume, t);
     App.sceneLayer.add(g);
     App.pageGfx = g;
     return data;
@@ -406,25 +423,46 @@
     const mp = $('#mini-pct');
     if (mp) mp.textContent = String(App.page).padStart(2, '0');
     const pl = $('#hud-vol');
-    if (pl) pl.textContent = 'ТОМ 01 · ПРЕДЫСТОРИЯ';
+    if (pl) {
+      pl.textContent = 'ТОМ ' + String(App.volume.id).padStart(2, '0') + ' · ' + App.volume.title.toUpperCase();
+    }
+    const ttlTop = $('#hud-vol-name');
+    if (ttlTop) ttlTop.textContent = 'ТОМ ' + String(App.volume.id).padStart(2, '0') + ' · ' + App.volume.title;
+    // маркеры страниц под текущий том
+    const marks = $('#page-marks');
+    if (marks && marks.childElementCount !== App.total) {
+      marks.innerHTML = '';
+      for (let i = 1; i <= App.total; i++) {
+        const b = document.createElement('button');
+        b.className = 'js-jump';
+        b.dataset.page = i;
+        b.textContent = String(i).padStart(2, '0');
+        b.addEventListener('click', function () { App.go(Number(b.dataset.page)); });
+        marks.appendChild(b);
+      }
+    }
     $$('.js-jump').forEach(function (el) {
       el.classList.toggle('is-active', Number(el.dataset.page) === App.page);
+    });
+    $$('#index-volumes li').forEach(function (li, i) {
+      li.classList.toggle('is-current', i === App.volumeIdx);
     });
   }
 
   function buildVolumes() {
     const wrap = $('#index-volumes');
-    if (!wrap || !PG.series) return;
+    if (!wrap || !App.volumes) return;
     wrap.innerHTML = '';
-    PG.series.forEach(function (v) {
+    App.volumes.forEach(function (v, i) {
       const li = document.createElement('li');
-      li.className = v.ready ? 'is-current' : 'is-plan';
-      li.innerHTML = '<b>Т' + String(v.n).padStart(2, '0') + '</b>' +
+      li.className = 'is-plan';
+      li.innerHTML = '<b>Т' + String(v.id).padStart(2, '0') + '</b>' +
         '<span>' + v.title + '</span>' +
-        '<em>' + (v.ready ? 'готов' : 'в работе') + '</em>';
-      if (v.ready) {
-        li.addEventListener('click', function () { closeIndex(); App.go(1); });
-      }
+        '<em>' + (v.pages ? v.pages.length : 0) + ' стр.</em>';
+      li.addEventListener('click', function () {
+        closeIndex();
+        App.setVolume(i);
+      });
       wrap.appendChild(li);
     });
   }
@@ -434,7 +472,7 @@
     const wrap = $('#index-pages');
     if (!wrap) return;
     wrap.innerHTML = '';
-    App.data[0].pages.forEach(function (p) {
+    App.volume.pages.forEach(function (p) {
       const b = document.createElement('button');
       b.className = 'idx-page js-jump';
       b.dataset.page = p.n;
@@ -606,15 +644,11 @@
 
   /* ----------------------------------------------------------------- старт */
   App.init = function () {
-    const root = PG.comicData;
-    App.data = root;
-
-    // Плоский индекс всех страниц текущего тома
-    App.allPages = {};
-    root.forEach(function (vol) {
-      vol.pages.forEach(function (p) { App.allPages[p.n] = p; });
-    });
-    App.total = Object.keys(App.allPages).length;
+    App.volumes = PG.compileVolumes();
+    App.volumeIdx = 0;
+    App.volume = App.volumes[0];
+    App.data = PG.comicData;
+    App.total = App.volume.pages.length;
 
     const wrap = $('#stage-wrap');
     App.stage = new Konva.Stage({
@@ -638,8 +672,7 @@
     App.layer.draw();
     drawCover();
     App.page = 1;
-    App.total = App.data[0].pages.length;
-    App.current = App.data[0].pages[0];
+    App.current = App.pageData(1);
     updateUi();
     buildIndex();
     bind();
@@ -676,9 +709,6 @@
     const start = $('#cover-start');
     start && start.addEventListener('click', function () {
       document.body.classList.add('reading');
-      const p = App.data[0].pages[0];
-      buildText(p);
-      App.current = p;
       App.go(1, { instant: true });
     });
   }
