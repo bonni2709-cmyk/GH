@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ПРОЕКТ-ГЕНЕЗИС · Том 1, Страница 5 — перестрелка в коридоре B</title>
+<meta name="description" content="Кинематографичный комикс на Konva.js: люди нарисованы кривыми Безье, обломки — на Matter.js, искры — на tsParticles, тряска экрана.">
+<link rel="stylesheet" href="cine.css">
+</head>
+<body>
+<div class="app">
+
+  <header class="top">
+    <div class="brand">ПРОЕКТ-ГЕНЕЗИС<small>подводный атомный техно-триллер</small></div>
+    <div class="chapter">Том 1 · <b>Страница 5</b> · Коридор B</div>
+    <div class="spacer"></div>
+    <button class="btn btn--fire" id="btn-fire" type="button">Выстрел · Space</button>
+    <button class="btn" id="btn-fit" type="button">FIT · F</button>
+  </header>
+
+  <main id="stage-wrap">
+    <div id="stage"></div>
+    <canvas id="physics" aria-hidden="true"></canvas>
+    <div id="particles" aria-hidden="true"></div>
+    <div id="text-layer"></div>
+  </main>
+
+  <footer class="dock">
+    <span><kbd>колесо</kbd> зум</span>
+    <span class="sep">/</span>
+    <span><kbd>перетаскивание</kbd> панорама</span>
+    <span class="sep">/</span>
+    <span><kbd>Space</kbd> выстрел</span>
+    <span class="sep">/</span>
+    <span><kbd>A</kbd> автоочередь</span>
+    <span class="legend">
+      <span><i class="dot dot--matter"></i>обломки · Matter.js</span>
+      <span><i class="dot dot--tsp"></i>искры · tsParticles</span>
+      <span><i class="dot dot--shake"></i>тряска · Konva.Stage</span>
+    </span>
+  </footer>
+</div>
+
+<!-- движки: всё локально, без CDN -->
+<script src="vendor/konva.min.js"></script>
+<script src="vendor/matter.min.js"></script>
+<script src="vendor/tsparticles.min.js"></script>
+<script src="vendor/simplex-noise.js"></script>
+<script src="vendor/chroma.min.js"></script>
+
+<!-- постановка -->
+<script src="js/cine/rig.js"></script>
+<script src="js/cine/stage.js"></script>
+<script src="js/cine/fx.js"></script>
+<script src="js/cine/chapter1.js"></script>
+<script src="js/cine/app.js"></script>
+
+<script>
+  window.addEventListener('load', function () {
+    try {
+      window.Cine.App.init();
+    } catch (err) {
+      console.error('[cine] init failed', err);
+      document.getElementById('stage-wrap').insertAdjacentHTML('beforeend',
+        '<pre style="position:absolute;left:20px;bottom:20px;color:#ff9a8f;font:12px monospace;z-index:9">' +
+        String(err && err.stack || err) + '</pre>');
+    }
+  });
+</script>
+</body>
+</html>

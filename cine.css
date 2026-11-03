@@ -1,0 +1,241 @@
+/* ============================================================================
+   ПРОЕКТ-ГЕНЕЗИС · КИНО  —  тема страницы
+   Тёмная глубоководная палитра, комиксовые пузыри в HTML/CSS.
+   ========================================================================== */
+:root {
+  --bg: #03070b;
+  --bg2: #061118;
+  --ink: #e6f6fa;
+  --muted: #8fb2bb;
+  --accent: #ff7a2f;
+  --cyan: #39e0d2;
+  --line: rgba(157, 246, 255, .18);
+  --mono: "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  --sans: "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --serif: "Georgia", "Times New Roman", serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: radial-gradient(120% 80% at 50% 0%, #0a1e27 0%, #03070b 62%, #010305 100%);
+  color: var(--ink);
+  font-family: var(--sans);
+  overflow: hidden;
+}
+
+/* --------------------------------------------------------------- каркас */
+.app {
+  display: grid;
+  grid-template-rows: 56px 1fr 64px;
+  height: 100%;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 22px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(6, 18, 24, .92), rgba(3, 9, 13, .6));
+  backdrop-filter: blur(8px);
+}
+
+.brand {
+  font-weight: 800;
+  letter-spacing: .16em;
+  font-size: 13px;
+  color: var(--cyan);
+  white-space: nowrap;
+}
+.brand small {
+  display: block;
+  letter-spacing: .06em;
+  font-weight: 400;
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.chapter {
+  font-size: 12px;
+  letter-spacing: .12em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.chapter b { color: var(--ink); font-weight: 700; }
+.spacer { flex: 1; }
+
+.btn {
+  appearance: none;
+  border: 1px solid rgba(157, 246, 255, .26);
+  background: rgba(6, 20, 26, .8);
+  color: var(--ink);
+  font: 600 12px/1 var(--sans);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background .18s, border-color .18s, transform .12s;
+}
+.btn:hover { background: rgba(57, 224, 210, .14); border-color: rgba(57, 224, 210, .5); }
+.btn:active { transform: translateY(1px); }
+.btn--fire {
+  border-color: rgba(255, 122, 47, .6);
+  color: #ffd3b8;
+  background: linear-gradient(180deg, rgba(255, 122, 47, .22), rgba(120, 38, 10, .3));
+  box-shadow: 0 0 0 1px rgba(255, 122, 47, .12), 0 8px 24px rgba(255, 122, 47, .12);
+}
+.btn--fire:hover { background: linear-gradient(180deg, rgba(255, 122, 47, .34), rgba(140, 46, 12, .4)); }
+
+/* ------------------------------------------------------------ сцена */
+#stage-wrap {
+  position: relative;
+  overflow: hidden;
+  cursor: grab;
+  background:
+    radial-gradient(60% 40% at 50% 30%, rgba(16, 46, 58, .55), rgba(2, 6, 9, 0) 70%),
+    #02060a;
+}
+#stage-wrap:active { cursor: grabbing; }
+
+#stage { position: absolute; inset: 0; }
+#stage .konvajs-content { background: #02060a; }
+
+#physics {
+  position: absolute;
+  left: 0; top: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+  z-index: 4;
+  will-change: transform;
+}
+
+#particles {
+  position: absolute;
+  left: 0; top: 0;
+  width: 1200px; height: 1800px;
+  transform-origin: 0 0;
+  pointer-events: none;
+  z-index: 5;
+  will-change: transform;
+}
+
+/* -------------------------------------------------- HTML-слой пузырей */
+#text-layer {
+  position: absolute;
+  left: 0; top: 0;
+  width: 1200px;
+  height: 1800px;
+  transform-origin: 0 0;
+  pointer-events: none;
+  z-index: 6;
+  will-change: transform;
+}
+
+.bubble {
+  position: absolute;
+  color: var(--ink);
+  filter: drop-shadow(0 18px 26px rgba(0, 0, 0, .55));
+}
+
+.bubble__who {
+  font: 800 15px/1 var(--sans);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.bubble__text {
+  font: 500 26px/1.3 var(--sans);
+  color: #eafaff;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, .8);
+}
+
+/* реплика — комиксовый «пузырь» с рваным краем */
+.bubble--speech .bubble__text,
+.bubble--speech .bubble__who {
+  position: relative;
+  background: linear-gradient(180deg, rgba(9, 24, 31, .96), rgba(4, 12, 16, .94));
+  border: 2px solid rgba(157, 246, 255, .32);
+  padding: 16px 20px 18px;
+  box-shadow: inset 0 0 30px rgba(0, 0, 0, .6), 0 0 0 1px rgba(0, 0, 0, .5);
+}
+.bubble--speech .bubble__who {
+  background: rgba(255, 122, 47, .16);
+  border-bottom: 0;
+  padding: 9px 20px 8px;
+  color: #ffb37a;
+  margin-bottom: 0;
+}
+.bubble--speech .bubble__text {
+  border-top: 0;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 72% 100%, 70% 96%, 66% 100%, 0 100%);
+}
+
+.bubble--accent .bubble__text { color: #ffd9c4; }
+.bubble--accent .bubble__who { color: #ff8f4d; }
+
+/* мизансцена — «литературная» плашка без рамки */
+.bubble--narration .bubble__text {
+  font: 400 24px/1.38 var(--serif);
+  color: #cfe6ec;
+  background: linear-gradient(180deg, rgba(3, 11, 15, .8), rgba(2, 7, 10, .6));
+  border-left: 3px solid rgba(255, 122, 47, .8);
+  padding: 14px 18px;
+}
+
+/* хвост пузыря */
+.bubble__tail {
+  position: absolute;
+  right: 18%;
+  bottom: -54px;
+  width: 56px;
+  height: 76px;
+  fill: rgba(9, 24, 31, .96);
+  stroke: rgba(157, 246, 255, .32);
+  stroke-width: 2;
+  transform: rotate(8deg);
+}
+
+/* ------------------------------------------------------------ подвал */
+.dock {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 22px;
+  border-top: 1px solid var(--line);
+  background: linear-gradient(0deg, rgba(6, 18, 24, .95), rgba(3, 9, 13, .55));
+  font: 500 12px/1 var(--mono);
+  color: var(--muted);
+  letter-spacing: .06em;
+}
+.dock kbd {
+  font: 600 11px/1 var(--mono);
+  border: 1px solid rgba(157, 246, 255, .3);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  padding: 4px 6px;
+  color: var(--ink);
+  background: rgba(2, 8, 12, .8);
+}
+.dock .sep { opacity: .35; }
+.dock .legend { margin-left: auto; display: flex; gap: 18px; align-items: center; }
+.dot {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  margin-right: 7px;
+  vertical-align: middle;
+}
+.dot--matter { background: #8fb2bb; box-shadow: 0 0 10px rgba(143, 178, 187, .8); }
+.dot--tsp { background: var(--accent); box-shadow: 0 0 10px rgba(255, 122, 47, .9); }
+.dot--shake { background: var(--cyan); box-shadow: 0 0 10px rgba(57, 224, 210, .9); }
+
+@media (max-width: 820px) {
+  .app { grid-template-rows: 48px 1fr 56px; }
+  .chapter { display: none; }
+  .legend { display: none; }
+}
