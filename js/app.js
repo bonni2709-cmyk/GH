@@ -30,13 +30,6 @@
   const $ = function (s, r) { return (r || document).querySelector(s); };
   const $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
 
-  /* ------------------------------------------------------------------ поиск */
-  function resolveVersion(t) {
-    const total = App.data.length;
-    const idx = (t - 1 + total) % total;
-    return { vol: App.data[idx], t: idx + 1 };
-  }
-
   App.pageData = function (t) {
     return App.volume.index[t];
   };
@@ -661,7 +654,7 @@
     App.volumes = PG.compileVolumes();
     App.volumeIdx = 0;
     App.volume = App.volumes[0];
-    App.data = PG.comicData;
+    App.data = App.volumes;
     App.total = App.volume.pages.length;
 
     const wrap = $('#stage-wrap');
