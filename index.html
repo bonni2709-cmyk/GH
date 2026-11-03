@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ПРОЕКТ-ГЕНЕЗИС · Том 01 «Предыстория»</title>
+<meta name="description" content="Мрачный подводный атомный техно-триллер. Интерактивный комикс на Konva.js: графика из геометрии, текст поверх Canvas.">
+<meta name="theme-color" content="#02080c">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- фон: только CSS-градиенты, без изображений -->
+  <div class="ambient" aria-hidden="true">
+    <div class="ambient__glow ambient__glow--a"></div>
+    <div class="ambient__glow ambient__glow--b"></div>
+    <div class="ambient__grid"></div>
+    <div class="ambient__scan"></div>
+  </div>
+
+  <!-- ======================================================= верхняя панель -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand__mark" aria-hidden="true">
+        <i></i><i></i><i></i>
+      </span>
+      <span class="brand__text">
+        <b>ПРОЕКТ-ГЕНЕЗИС</b>
+        <small>подводный атомный техно-триллер</small>
+      </span>
+    </div>
+
+    <div class="topbar__meta">
+      <span class="tag tag--live"><i></i>ГЛУБИНА 10 994 М</span>
+      <span class="tag">ТОМ 01 · ПРЕДЫСТОРИЯ</span>
+      <span class="tag tag--muted" id="hud-place">станция «Генезис-1»</span>
+    </div>
+
+    <div class="topbar__actions">
+      <button class="btn btn--ghost" id="btn-ui" type="button" aria-label="Скрыть интерфейс">
+        <span>HUD</span><kbd>H</kbd>
+      </button>
+      <button class="btn btn--ghost" id="btn-index" type="button">
+        <span>Содержание</span><kbd>I</kbd>
+      </button>
+    </div>
+  </header>
+
+  <!-- ======================================================== сцена (Konva) -->
+  <main class="stage-wrap" id="stage-wrap">
+    <div class="stage" id="stage" aria-label="Страница комикса"></div>
+
+    <!-- Текст диалогов: HTML/CSS поверх Canvas, синхронизирован трансформом -->
+    <div class="text-layer" id="text-layer" aria-live="polite"></div>
+
+    <div class="lens" aria-hidden="true"></div>
+    <div class="frame-hud" aria-hidden="true">
+      <span class="frame-hud__tl">GENESIS‑1 // VISUAL LOG</span>
+      <span class="frame-hud__tr" id="hud-zoom">100%</span>
+      <span class="frame-hud__bl">СЛОЙ: KONVA / SHAPES ONLY</span>
+      <span class="frame-hud__br">SEC. 09‑A</span>
+    </div>
+
+    <!-- кнопки-стрелки по краям -->
+    <button class="edge-nav edge-nav--prev" data-nav="prev" type="button" aria-label="Назад">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg>
+    </button>
+    <button class="edge-nav edge-nav--next" data-nav="next" type="button" aria-label="Вперёд">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+    </button>
+
+    <!-- мини-карта -->
+    <aside class="minimap" aria-hidden="true">
+      <div class="minimap__cap"><span>НАВИГАЦИЯ</span><span id="mini-pct">01</span></div>
+      <canvas id="mini-canvas" width="132" height="198"></canvas>
+      <div class="minimap__hint">клик — перейти</div>
+    </aside>
+  </main>
+
+  <!-- ============================================================ нижний док -->
+  <footer class="dock">
+    <div class="dock__side">
+      <button class="btn btn--icon" id="btn-prev" type="button" aria-label="Предыдущая страница">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5 8 12l7 7"/></svg>
+      </button>
+      <div class="counter">
+        <b id="hud-page" aria-live="polite">01 / 10</b>
+        <span>СТРАНИЦА</span>
+      </div>
+    </div>
+
+    <div class="track">
+      <div class="track__bar"><div class="track__fill" id="progress-bar"></div></div>
+      <div class="track__marks">
+        <button class="js-jump is-active" data-page="1" type="button">01</button>
+        <button class="js-jump" data-page="2" type="button">02</button>
+        <button class="js-jump" data-page="3" type="button">03</button>
+        <button class="js-jump" data-page="4" type="button">04</button>
+        <button class="js-jump" data-page="5" type="button">05</button>
+        <button class="js-jump" data-page="6" type="button">06</button>
+        <button class="js-jump" data-page="7" type="button">07</button>
+        <button class="js-jump" data-page="8" type="button">08</button>
+        <button class="js-jump" data-page="9" type="button">09</button>
+        <button class="js-jump" data-page="10" type="button">10</button>
+      </div>
+    </div>
+
+    <div class="dock__side dock__side--right">
+      <div class="zoom">
+        <button class="btn btn--icon btn--sm" id="btn-zoom-out" type="button" aria-label="Уменьшить">−</button>
+        <button class="btn btn--icon btn--sm btn--wide" id="btn-fit" type="button" aria-label="Вписать страницу">FIT</button>
+        <button class="btn btn--icon btn--sm" id="btn-zoom-in" type="button" aria-label="Увеличить">+</button>
+      </div>
+      <button class="btn btn--primary" id="btn-next" type="button">
+        <span>Далее</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+      </button>
+    </div>
+  </footer>
+
+  <!-- =========================================================== подсказки -->
+  <div class="hintbar" aria-hidden="true">
+    <span><b>колесо</b> — зум</span>
+    <span><b>перетаскивание</b> — сдвиг</span>
+    <span><b>← →</b> — страницы</span>
+    <span><b>2× клик</b> — вписать</span>
+    <span><b>H</b> — скрыть интерфейс</span>
+  </div>
+
+  <!-- ============================================================ содержание -->
+  <div class="index" id="index" aria-hidden="true" role="dialog" aria-label="Содержание">
+    <div class="index__scrim"></div>
+    <div class="index__panel">
+      <header class="index__head">
+        <div>
+          <span class="kicker">АРХИВ СТАНЦИИ «ГЕНЕЗИС-1»</span>
+          <h2>Содержание</h2>
+        </div>
+        <button class="btn btn--icon" id="index-close" type="button" aria-label="Закрыть">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </header>
+
+      <div class="index__body">
+        <section class="index__vols">
+          <h3>Тома</h3>
+          <ol class="vols" id="index-volumes"></ol>
+          <p class="index__note">
+            Цикл: 12 томов по 10 страниц. Тома 01–02 — предыстория.
+            Текущий том собран полностью; остальные в производстве.
+          </p>
+        </section>
+
+        <section class="index__pages">
+          <h3>Том 01 · Предыстория</h3>
+          <div class="idx-pages" id="index-pages"></div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="vendor/konva.min.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/figures.js"></script>
+<script src="js/scenes.js"></script>
+<script src="js/scenes2.js"></script>
+<script src="js/scenes3.js"></script>
+<script src="js/comicData.js"></script>
+<script src="js/app.js"></script>
+<script>
+  window.addEventListener('DOMContentLoaded', function () {
+    try {
+      PG.App.init();
+    } catch (err) {
+      console.error(err);
+      var n = document.createElement('div');
+      n.className = 'fatal';
+      n.textContent = 'Не удалось запустить движок: ' + err.message;
+      document.body.appendChild(n);
+    }
+  });
+</script>
+</body>
+</html>
