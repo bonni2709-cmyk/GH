@@ -26,6 +26,19 @@ class LogBusTest {
     }
 
     @Test
+    fun mirrorSeesEveryLineAndItsFailuresAreContained() {
+        val seen = mutableListOf<String>()
+        val bus = LogBus(mirror = { seen += "${it.level}:${it.tag}:${it.text}" })
+        bus.warn("a", "one")
+        bus.core("2026/11/04 10:00:00 [Error] boom")
+        assertEquals(listOf("WARN:a:one", "ERROR:xray:boom"), seen)
+
+        val broken = LogBus(mirror = { throw IllegalStateException("mirror down") })
+        broken.info("t", "still recorded")
+        assertEquals("still recorded", broken.lines.value.single().text)
+    }
+
+    @Test
     fun coreLinesLoseTheirTimestampAndGainALevel() {
         val bus = LogBus()
         bus.core("2026/11/04 10:00:00.123456 [Warning] app/dns: lookup failed")

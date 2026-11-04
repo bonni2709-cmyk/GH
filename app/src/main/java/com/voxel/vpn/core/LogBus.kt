@@ -19,10 +19,14 @@ data class LogLine(
     val text: String,
 )
 
-/** In-memory ring buffer with the most recent log lines of the app and of the Xray core. */
+/**
+ * In-memory ring buffer with the most recent log lines of the app and of the Xray core.
+ * [mirror] sees every recorded line as well, which is how the app copies them into logcat.
+ */
 class LogBus(
     private val capacity: Int = 500,
     private val clock: () -> Long = System::currentTimeMillis,
+    private val mirror: ((LogLine) -> Unit)? = null,
 ) {
     private val counter = AtomicLong()
     private val state = MutableStateFlow<List<LogLine>>(emptyList())
@@ -35,6 +39,11 @@ class LogBus(
         val line = LogLine(counter.incrementAndGet(), clock(), level, tag, clean.take(MAX_LINE_LENGTH))
         state.update { old ->
             if (old.size >= capacity) old.subList(old.size - capacity + 1, old.size) + line else old + line
+        }
+        try {
+            mirror?.invoke(line)
+        } catch (e: RuntimeException) {
+            // A broken mirror must never break logging.
         }
     }
 

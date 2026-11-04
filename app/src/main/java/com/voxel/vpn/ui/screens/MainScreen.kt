@@ -49,6 +49,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -95,6 +96,9 @@ fun MainScreen(viewModel: MainViewModel) {
     var showLogs by rememberSaveable { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<Subscription?>(null) }
 
+    val clipboardEmptyText = stringResource(R.string.msg_clipboard_empty)
+    val logsCopiedText = stringResource(R.string.msg_logs_copied)
+
     val selectedId = data.settings.selectedServerId
     val selected = data.server(selectedId)
     val nowSeconds = System.currentTimeMillis() / 1000
@@ -127,7 +131,7 @@ fun MainScreen(viewModel: MainViewModel) {
                     AddCard(
                         busy = importing,
                         onSubmit = viewModel::importText,
-                        onEmptyClipboard = { viewModel.say(context.getString(R.string.msg_clipboard_empty)) },
+                        onEmptyClipboard = { viewModel.say(clipboardEmptyText) },
                     )
                 }
                 if (data.servers.isNotEmpty()) {
@@ -187,7 +191,7 @@ fun MainScreen(viewModel: MainViewModel) {
                 onClose = { showLogs = false },
                 onCopy = {
                     copyToClipboard(context, viewModel.logsText())
-                    viewModel.say(context.getString(R.string.msg_logs_copied))
+                    viewModel.say(logsCopiedText)
                 },
                 onClear = viewModel::clearLogs,
             )
@@ -461,18 +465,18 @@ private fun SubscriptionHeader(
     onRefresh: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    val resources = LocalContext.current.resources
     val userInfo = subscription.meta.userInfo?.takeIf { !subscription.meta.hideTraffic }
     val expireAt = subscription.meta.userInfo?.expireAt
     val expired = expireAt != null && expireAt < nowSeconds
 
-    val details = buildList {
-        add(resources.getQuantityString(R.plurals.servers_count, serverCount, serverCount))
-        if (expireAt != null) {
-            val days = Format.daysLeft(expireAt, nowSeconds)
-            add(if (days < 0) resources.getString(R.string.sub_expired) else resources.getQuantityString(R.plurals.days_left, days.toInt(), days.toInt()))
-        }
+    val serversText = pluralStringResource(R.plurals.servers_count, serverCount, serverCount)
+    val expiryText = if (expireAt == null) {
+        null
+    } else {
+        val days = Format.daysLeft(expireAt, nowSeconds)
+        if (days < 0) stringResource(R.string.sub_expired) else pluralStringResource(R.plurals.days_left, days.toInt(), days.toInt())
     }
+    val details = listOfNotNull(serversText, expiryText)
 
     Column(modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {

@@ -113,6 +113,7 @@ class VoxelVpnService : VpnService() {
         scope.launch {
             running.cancelAndJoin()
             teardown()
+            voxel.logs.info("vpn", "Disconnected")
             voxel.hub.set(ConnectionState.Idle)
             finishService()
         }

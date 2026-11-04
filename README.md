@@ -36,7 +36,7 @@ Entries the core cannot run (ShadowsocksR, TUIC, Hysteria, WireGuard/AmneziaWG, 
 | `app/src/main/java/com/voxel/vpn/vpn` | `VoxelVpnService`, `VpnController`, Kotlin face of the Go binding |
 | `app/src/main/java/com/voxel/vpn/ui` | view model, theme, components, screens |
 | `app/src/main/go` | `voxelcore`: the Go facade over Xray-core, its tests and the gomobile build script |
-| `.github/workflows/build.yml` | CI: core AAR, app tests and APK |
+| `.github/workflows/build.yml` | CI: core AAR, app tests, APK, emulator end-to-end test |
 
 ## Build
 
@@ -46,8 +46,17 @@ CI does everything; a push to any branch runs `.github/workflows/build.yml`:
 2. **app**: the JVM unit tests run first and write every Xray configuration the builder can produce; the Go test
    then loads each of them into the real Xray-core and also checks that broken variants are rejected; finally the
    signed release APK is built and uploaded as `voxel-vpn-apk`.
-3. **export**: on pushes the APK is also stored as a git blob (its sha is printed in the job annotations), so it can
-   be fetched with `gh api repos/<owner>/<repo>/git/blobs/<sha> -H 'Accept: application/vnd.github.raw' > voxel-vpn.apk`.
+   Android lint runs next to it (it reports, it does not block).
+3. **export**: on pushes the APK is also stored as git blobs of at most 15 MB (their shas are printed in the job
+   annotations, in order), so it can be fetched with the plain REST API where the artifact hosts are not reachable:
+   `for sha in <sha1> <sha2> ...; do gh api repos/<owner>/<repo>/git/blobs/$sha -H 'Accept: application/vnd.github.raw'; done > voxel-vpn.apk`.
+4. **e2e**: an Android 14 emulator installs the APK and drives it for real. An `incy://add/...` link imports a
+   subscription from a web server on the runner, `incy://connect` brings the VPN up, and a TCP request to an address
+   that exists nowhere (203.0.113.7) must be answered: it can only arrive through the TUN device, the Xray-core
+   `tun` inbound, VLESS, and the Xray-core server (`app/src/main/go/cmd/e2e-server`) that also runs on the runner.
+   Before the connection and after the disconnect the same request must fail. Screenshots of every step are
+   exported as git blobs and as the `e2e-output` artifact. The scripts are in `.github/scripts` (`e2e.sh`,
+   `e2e-servers.sh`, `uitool.py`) and the server setup in `.github/e2e`.
 
 Locally (Go 1.27, JDK 21, Android SDK with an NDK):
 

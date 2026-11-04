@@ -233,4 +233,29 @@ class SubscriptionBodyParserTest {
         val parsed = parser.parse("ssr://" + "a".repeat(300))
         assertTrue(parsed.skipped.single().source.length <= 49)
     }
+
+    @Test
+    fun theEmulatorTestSubscriptionImportsAsPlainVlessToTheHostMachine() {
+        val link = "vless://5783a3e7-e373-51cd-8642-c83782b807c5@10.0.2.2:10443?encryption=none&security=none&type=tcp#E2E%20server"
+        val body = "#profile-title: VOXEL E2E\n" +
+            "#subscription-userinfo: upload=1048576; download=5242880; total=10737418240; expire=1893456000\n" +
+            link + "\n"
+        val parsed = parser.parse(body)
+        val server = parsed.servers.single()
+        assertEquals("E2E server", server.name)
+        assertEquals("10.0.2.2", server.host)
+        assertEquals(10443, server.port)
+        assertEquals("vless", server.protocol)
+        assertEquals("VOXEL E2E", parsed.meta.title)
+        assertEquals(10_737_418_240L, parsed.meta.userInfo!!.total)
+        assertTrue(parsed.skipped.isEmpty())
+    }
+
+    @Test
+    fun plainVlessToAPublicAddressIsSkippedBecauseXrayRefusesIt() {
+        val link = "vless://5783a3e7-e373-51cd-8642-c83782b807c5@203.0.113.7:10443?encryption=none&security=none&type=tcp#Open"
+        val parsed = parser.parse(link)
+        assertTrue(parsed.servers.isEmpty())
+        assertTrue(parsed.skipped.single().reason.contains("VLESS"))
+    }
 }

@@ -206,20 +206,15 @@ jobs:
                   severity = issue.get("severity")
                   counts[severity] = counts.get(severity, 0) + 1
               print(f"::notice title=Lint::{len(issues)} findings {counts}")
-              important = {"NewApi", "MissingPermission", "ForegroundServicePermission", "ForegroundServiceType",
-                           "ExportedService", "UnspecifiedRegisterReceiverFlag", "InlinedApi", "MissingInflatedId"}
-              shown = 0
-              for issue in issues:
-                  if issue.get("severity") in ("Fatal", "Error") or issue.get("id") in important:
-                      location = issue.find("location")
-                      where = ""
-                      if location is not None:
-                          where = f'{location.get("file", "").split("/app/", 1)[-1]}:{location.get("line", "")}'
-                      text = f'{issue.get("severity")} {issue.get("id")}: {issue.get("message")} @ {where}'
-                      print("::warning title=Lint finding::" + escape(text))
-                      shown += 1
-                      if shown >= 25:
-                          break
+              order = {"Fatal": 0, "Error": 1, "Warning": 2}
+              ranked = sorted(issues, key=lambda issue: order.get(issue.get("severity"), 3))
+              for issue in ranked[:40]:
+                  location = issue.find("location")
+                  where = ""
+                  if location is not None:
+                      where = f'{location.get("file", "").split("/app/", 1)[-1]}:{location.get("line", "")}'
+                  text = f'{issue.get("severity")} {issue.get("id")}: {issue.get("message")} @ {where}'
+                  print("::warning title=Lint finding::" + escape(text))
           PY
 
       - uses: actions/upload-artifact@v7
@@ -277,3 +272,107 @@ jobs:
           done
           echo "::notice title=APK blobs::name=$(basename "$apk") size=$(stat -c %s "$apk") sha256=$(sha256sum "$apk" | cut -d' ' -f1) parts=$shas"
           echo "APK parts: $shas"
+
+  e2e:
+    # Boots an Android emulator, installs the release APK and drives it end to end: an incy:// link imports a
+    # subscription, the app connects through its VPN tunnel, and a TCP request from the emulator to an address
+    # that does not exist must come back through VLESS from the Xray server that runs on this runner.
+    # The screenshots and logs are exported as git blobs, like the APK.
+    name: Emulator end-to-end (import, connect, traffic through the tunnel)
+    needs: app
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    env:
+      E2E_APK: ${{ github.workspace }}/apk/voxel-vpn-release.apk
+      E2E_OUT: ${{ github.workspace }}/e2e-out
+    steps:
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          if [ -e /dev/kvm ]; then
+            echo "::notice title=KVM::/dev/kvm is available ($(nproc) CPUs, $(free -m | awk '/Mem:/ {print $2}') MB RAM)"
+          else
+            echo "::error title=KVM::/dev/kvm is missing, so the emulator cannot run with hardware acceleration ($(nproc) CPUs)"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: voxel-vpn-apk
+          path: apk
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: app/src/main/go/go.mod
+          cache-dependency-path: app/src/main/go/go.sum
+
+      - name: Build the Xray test server
+        working-directory: app/src/main/go
+        run: go build -ldflags=-checklinkname=0 -o "$RUNNER_TEMP/e2e-server" ./cmd/e2e-server
+
+      - name: Start the test servers
+        env:
+          E2E_SERVER_BIN: ${{ runner.temp }}/e2e-server
+        run: bash .github/scripts/e2e-servers.sh
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Run the app on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: bash .github/scripts/e2e.sh
+
+      - name: Test server logs
+        if: always()
+        run: |
+          for log in "$RUNNER_TEMP/e2e/xray.log" "$RUNNER_TEMP/e2e/web.log"; do
+            [ -f "$log" ] || continue
+            echo "::notice title=$(basename "$log")::$(tail -n 15 "$log" | head -c 3000 | python3 -c 'import sys; sys.stdout.write(sys.stdin.read().replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))')"
+          done
+
+      - name: Export the screenshots and logs as git blobs
+        if: always() && github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s nullglob
+          list=""
+          for file in "$E2E_OUT"/*.png "$E2E_OUT"/*.txt; do
+            python3 - "$file" > "$RUNNER_TEMP/blob.json" <<'PY'
+          import base64, json, sys
+          with open(sys.argv[1], "rb") as handle:
+              print(json.dumps({"content": base64.b64encode(handle.read()).decode("ascii"), "encoding": "base64"}))
+          PY
+            if sha="$(gh api -X POST "repos/$GITHUB_REPOSITORY/git/blobs" --input "$RUNNER_TEMP/blob.json" --jq .sha 2> "$RUNNER_TEMP/gh.err")"; then
+              list="${list:+$list }$(basename "$file")=$sha"
+            else
+              echo "::warning title=E2E blob upload failed::$(basename "$file"): $(head -c 500 "$RUNNER_TEMP/gh.err" | tr '\n' ' ')"
+            fi
+          done
+          echo "::notice title=E2E files::$list"
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: e2e-output
+          path: e2e-out
+          if-no-files-found: ignore
+          retention-days: 7

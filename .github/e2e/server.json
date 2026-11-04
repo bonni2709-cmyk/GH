@@ -1,0 +1,23 @@
+{
+  "log": { "loglevel": "warning" },
+  "inbounds": [
+    {
+      "tag": "vless-in",
+      "listen": "0.0.0.0",
+      "port": 10443,
+      "protocol": "vless",
+      "settings": {
+        "clients": [{ "id": "5783a3e7-e373-51cd-8642-c83782b807c5" }],
+        "decryption": "none"
+      },
+      "streamSettings": { "network": "tcp" }
+    }
+  ],
+  "outbounds": [
+    {
+      "tag": "to-local-web",
+      "protocol": "freedom",
+      "settings": { "redirect": "127.0.0.1:9000" }
+    }
+  ]
+}
