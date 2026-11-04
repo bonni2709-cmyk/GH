@@ -1,7 +1,5 @@
 package com.voxel.vpn.net
 
-import com.sun.net.httpserver.HttpExchange
-import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -9,51 +7,45 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.io.ByteArrayOutputStream
-import java.net.InetAddress
-import java.net.InetSocketAddress
 import java.util.concurrent.atomic.AtomicReference
 import java.util.zip.GZIPOutputStream
 
 class HttpSubscriptionFetcherTest {
-    private lateinit var server: HttpServer
+    private lateinit var server: TestHttpServer
     private val seenUserAgent = AtomicReference<String?>()
     private val seenExtra = AtomicReference<String?>()
-    private val base get() = "http://127.0.0.1:${server.address.port}"
+    private val base get() = server.baseUrl
 
-    private fun HttpExchange.reply(code: Int, body: ByteArray, vararg headers: Pair<String, String>) {
-        headers.forEach { (k, v) -> responseHeaders.add(k, v) }
-        sendResponseHeaders(code, if (body.isEmpty()) -1 else body.size.toLong())
-        if (body.isNotEmpty()) responseBody.use { it.write(body) }
-        close()
-    }
+    private fun reply(code: Int, body: ByteArray, vararg headers: Pair<String, String>) =
+        TestHttpServer.Response(code, body, headers.toList())
 
     @Before
     fun start() {
-        server = HttpServer.create(InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0)
-        server.createContext("/plain") { ex ->
-            seenUserAgent.set(ex.requestHeaders.getFirst("User-Agent"))
-            seenExtra.set(ex.requestHeaders.getFirst("X-Test"))
-            ex.reply(
+        server = TestHttpServer()
+        server.route("/plain") { request ->
+            seenUserAgent.set(request.headers["user-agent"])
+            seenExtra.set(request.headers["x-test"])
+            reply(
                 200, "hello \u043C\u0438\u0440".toByteArray(),
                 "Profile-Title" to "Title", "Subscription-Userinfo" to "upload=1; download=2; total=3", "Content-Type" to "text/plain",
             )
         }
-        server.createContext("/gzip") { ex ->
+        server.route("/gzip") {
             val out = ByteArrayOutputStream()
             GZIPOutputStream(out).use { it.write("zipped body".toByteArray()) }
-            ex.reply(200, out.toByteArray(), "Content-Encoding" to "gzip")
+            reply(200, out.toByteArray(), "Content-Encoding" to "gzip")
         }
-        server.createContext("/redirect") { ex -> ex.reply(302, ByteArray(0), "Location" to "/plain") }
-        server.createContext("/loop") { ex -> ex.reply(302, ByteArray(0), "Location" to "/loop") }
-        server.createContext("/other-scheme") { ex -> ex.reply(302, ByteArray(0), "Location" to "ftp://example.com/x") }
-        server.createContext("/gone") { ex -> ex.reply(404, "not here".toByteArray()) }
-        server.createContext("/big") { ex -> ex.reply(200, ByteArray(100_000) { 'a'.code.toByte() }) }
+        server.route("/redirect") { reply(302, ByteArray(0), "Location" to "/plain") }
+        server.route("/loop") { reply(302, ByteArray(0), "Location" to "/loop") }
+        server.route("/other-scheme") { reply(302, ByteArray(0), "Location" to "ftp://example.com/x") }
+        server.route("/gone") { reply(404, "not here".toByteArray()) }
+        server.route("/big") { reply(200, ByteArray(100_000) { 'a'.code.toByte() }) }
         server.start()
     }
 
     @After
     fun stop() {
-        server.stop(0)
+        server.close()
     }
 
     private fun fetcher(max: Int = 1_000_000) =

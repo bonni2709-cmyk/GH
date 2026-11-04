@@ -30,10 +30,22 @@ def escape_property(text: str) -> str:
     return escape_data(text).replace(":", "%3A").replace(",", "%2C")
 
 
+KOTLIN_ERROR = re.compile(r"^e: (?:file://)?(\S+?):\d+:\d+")
+PER_FILE_LIMIT = 6
+
+
 def digest(lines):
-    out, seen, i = [], set(), 0
+    out, seen, per_file, i = [], set(), {}, 0
     while i < len(lines):
         line = lines[i].rstrip()
+        kotlin = KOTLIN_ERROR.match(line)
+        if kotlin:
+            # a broken import can produce hundreds of lines in one file: keep a few per file so every file shows up
+            count = per_file.get(kotlin.group(1), 0)
+            per_file[kotlin.group(1)] = count + 1
+            if count >= PER_FILE_LIMIT:
+                i += 1
+                continue
         if ERROR_LINE.search(line) and line not in seen:
             seen.add(line)
             out.append(line[:500])
