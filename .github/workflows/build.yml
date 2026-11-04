@@ -364,16 +364,16 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Run the app on an emulator
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 34
-          target: google_apis
-          arch: x86_64
-          profile: pixel_6
-          disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
-          script: bash .github/scripts/e2e.sh
+      # The emulator is installed and booted by our own script instead of a marketplace action: it runs with
+      # `-accel on` (no silent fall back to software emulation) and reports its own log when a boot fails.
+      - name: Install the emulator and a system image
+        run: bash .github/scripts/emulator.sh install
+
+      - name: Boot the emulator
+        run: bash .github/scripts/emulator.sh boot
+
+      - name: Drive the app on the emulator
+        run: bash .github/scripts/e2e.sh
 
       - name: Test server logs
         if: always()
