@@ -1976,4 +1976,741 @@
     return {};
   };
 
+
+  /* --------------------------------------------------------- 27. ядро Мнемы (крупно) */
+  Cine.setCoreRoom = function (root, p) {
+    const g = new (K().Group)();
+    root.add(g);
+    const S = Simplex();
+    const n = new S(8123);
+    const cy = 'rgba(157,246,255,';
+
+    // стена
+    g.add(new (K().Path)({
+      data: 'M-200 -200 L' + (W + 200) + ' -200 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
+      fillLinearGradientStartPoint: { x: 0, y: 0 },
+      fillLinearGradientEndPoint: { x: 0, y: H },
+      fillLinearGradientColorStops: [0, '#04060d', 0.45, '#070c18', 0.78, '#050a12', 1, '#02040a']
+    }));
+
+    // кабели по стенам
+    for (let i = 0; i < 22; i++) {
+      const x0 = -40 + i * 58;
+      const wob = n.noise2D(i * 1.3, 5) * 80;
+      g.add(new (K().Path)({
+        data: 'M' + r(x0) + ' -120 C' + r(x0 + wob) + ' 420 ' + r(x0 - wob * 0.7) + ' 900 ' + r(x0 + 18) + ' 1420',
+        stroke: i % 5 ? '#0b1220' : '#141f33', strokeWidth: 3 + (i % 3) * 2, opacity: 0.95
+      }));
+    }
+
+    // пол-решётка
+    g.add(new (K().Path)({
+      data: 'M-200 1580 L' + (W + 200) + ' 1580 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
+      fillLinearGradientStartPoint: { x: 0, y: 1580 },
+      fillLinearGradientEndPoint: { x: 0, y: H },
+      fillLinearGradientColorStops: [0, '#0a121c', 0.5, '#05090f', 1, '#020408']
+    }));
+    for (let i = 0; i < 16; i++) {
+      g.add(new (K().Line)({
+        points: [-80 + i * 90, 1590, -140 + i * 90, 1780],
+        stroke: '#16232f', strokeWidth: 3, opacity: 0.9
+      }));
+    }
+    for (let i = 0; i < 4; i++) {
+      g.add(new (K().Line)({
+        points: [-120, 1620 + i * 46, W + 120, 1616 + i * 46],
+        stroke: '#16232f', strokeWidth: 2.5, opacity: 0.7
+      }));
+    }
+
+    // кольцо-подиум
+    g.add(new (K().Ellipse)({
+      x: 600, y: 1570, radiusX: 300, radiusY: 46,
+      fill: '#0b1420', stroke: '#1b3247', strokeWidth: 4
+    }));
+    g.add(new (K().Ellipse)({
+      x: 600, y: 1570, radiusX: 236, radiusY: 34,
+      stroke: cy + '0.22)', strokeWidth: 2
+    }));
+
+    // дальние стойки у стен
+    [40, 150, 980, 1090].forEach(function (x) {
+      g.add(new (K().Path)({
+        data: 'M' + x + ' 1180 L' + (x + 54) + ' 1180 L' + (x + 58) + ' 1520 L' + (x - 4) + ' 1520 Z',
+        fill: '#070d15', stroke: '#101d2a', strokeWidth: 2, opacity: 0.95
+      }));
+      for (let i = 0; i < 5; i++) {
+        g.add(new (K().Circle)({
+          x: x + 27, y: 1240 + i * 56, radius: 3.4, fill: '#1b3040', opacity: 0.9
+        }));
+      }
+    });
+    // трубки охлаждения по бокам столба (за ним)
+    [430, 690].forEach(function (x0) {
+      for (let i = 0; i < 4; i++) {
+        const x = x0 + i * 18;
+        g.add(new (K().Line)({ points: [x, 1030, x, 1560], stroke: '#1a2a3d', strokeWidth: 7, opacity: 0.95 }));
+        g.add(new (K().Line)({ points: [x - 2, 1030, x - 2, 1560], stroke: '#4e7ba0', strokeWidth: 1.4, opacity: 0.28 }));
+      }
+    });
+
+    // столб ядра: три сегмента, сужающиеся кверху
+    const segY = [1570, 1290, 1050, 870];
+    for (let i = 0; i < 3; i++) {
+      const yb = segY[i], yt = segY[i + 1] + 14;
+      const wb = 132 - i * 22, wt = 112 - i * 22;
+      g.add(new (K().Path)({
+        data: 'M' + (600 - wb) + ' ' + yb +
+          ' C' + (600 - wb - 14) + ' ' + (yb - 82) + ' ' + (600 - wt) + ' ' + (yt + 62) + ' ' + (600 - wt) + ' ' + yt +
+          ' C' + (600 - wt * 0.5) + ' ' + (yt - 34) + ' ' + (600 + wt * 0.5) + ' ' + (yt - 34) + ' ' + (600 + wt) + ' ' + yt +
+          ' C' + (600 + wt) + ' ' + (yt + 62) + ' ' + (600 + wb + 14) + ' ' + (yb - 82) + ' ' + (600 + wb) + ' ' + yb + ' Z',
+        fillLinearGradientStartPoint: { x: 600 - wb, y: 0 },
+        fillLinearGradientEndPoint: { x: 600 + wb, y: 0 },
+        fillLinearGradientColorStops: [0, '#04070d', 0.34, '#0e1830', 0.55, '#1d3050', 0.72, '#0c1526', 1, '#03060b'],
+        stroke: '#02040a', strokeWidth: 3
+      }));
+      // светящееся кольцо-стык
+      g.add(new (K().Ellipse)({
+        x: 600, y: yt, radiusX: wt + 3, radiusY: 18,
+        stroke: cy + '0.5)', strokeWidth: 2.2, opacity: 0.75
+      }));
+      g.add(new (K().Ellipse)({
+        x: 600, y: yt + 5, radiusX: wt + 16, radiusY: 24,
+        stroke: cy + '0.12)', strokeWidth: 8
+      }));
+    }
+
+    // сердцевина — свет
+    g.add(new (K().Circle)({
+      x: 600, y: 966, radius: 46,
+      fillRadialGradientStartPoint: { x: 0, y: 0 },
+      fillRadialGradientEndPoint: { x: 0, y: 0 },
+      fillRadialGradientRadius: 46,
+      fillRadialGradientColorStops: [0, 'rgba(230,255,255,0.95)', 0.4, 'rgba(90,220,235,0.5)', 1, 'rgba(10,40,60,0)']
+    }));
+    g.add(new (K().Circle)({ x: 600, y: 966, radius: 9, fill: '#ffffff', opacity: 0.95 }));
+
+    // капсулы памяти в верхнем сегменте
+    for (let i = 0; i < 9; i++) {
+      const col = i % 3, row = Math.floor(i / 3);
+      g.add(new (K().Circle)({
+        x: 600 - 44 + col * 44, y: 880 + row * 52, radius: 11,
+        fill: 'rgba(157,246,255,0.14)', stroke: cy + '0.55)', strokeWidth: 1.4
+      }));
+    }
+
+    // консоли по краям
+    [[-40, 460], [780, 460]].forEach(function (c, k) {
+      const x = c[0], w = c[1];
+      g.add(new (K().Path)({
+        data: 'M' + x + ' 1560 L' + (x + w) + ' 1548 L' + (x + w - 26) + ' 1250 L' + (x + 26) + ' 1262 Z',
+        fillLinearGradientStartPoint: { x: 0, y: 1250 },
+        fillLinearGradientEndPoint: { x: 0, y: 1560 },
+        fillLinearGradientColorStops: [0, '#173040', 0.5, '#0d1d29', 1, '#060f16'],
+        stroke: '#1d3a4a', strokeWidth: 3
+      }));
+      g.add(new (K().Path)({
+        data: 'M' + (x + 34) + ' 1320 L' + (x + w - 40) + ' 1310 L' + (x + w - 52) + ' 1400 L' + (x + 34) + ' 1410 Z',
+        fill: '#08171f', stroke: cy + '0.3)', strokeWidth: 2
+      }));
+      for (let i = 0; i < 4; i++) {
+        g.add(new (K().Line)({
+          points: [x + 46, 1336 + i * 18, x + 74 + i * 26, 1334 + i * 18],
+          stroke: k ? '#9df6ff' : '#8affd6', strokeWidth: 3, opacity: 0.4 + i * 0.1, lineCap: 'round'
+        }));
+      }
+      for (let i = 0; i < 4; i++) {
+        g.add(new (K().Circle)({
+          x: x + 52 + i * 30, y: 1476, radius: 6,
+          fill: i === 1 ? '#ff9a5c' : '#2b5a68', opacity: 0.8
+        }));
+      }
+    });
+
+    // искры памяти
+    const sparks = new (K().Group)();
+    for (let i = 0; i < 26; i++) {
+      sparks.add(new (K().Circle)({
+        x: 470 + ((i * 53) % 260), y: 300 + ((i * 137) % 1180),
+        radius: 1.8 + (i % 3), fill: i % 4 ? '#9df6ff' : '#ffffff',
+        shadowColor: '#9df6ff', shadowBlur: 16, opacity: 0.6 + (i % 3) * 0.12
+      }));
+    }
+    g.add(sparks);
+
+    return { sparks: sparks, core: { x: 600, y: 1570 } };
+  };
+
+  /* --------------------------------------------------------- 28. стена записей */
+  Cine.setMemoryWall = function (root, p) {
+    const g = new (K().Group)();
+    root.add(g);
+    const S = Simplex();
+    const n = new S(4471);
+
+    g.add(new (K().Path)({
+      data: 'M-200 -200 L' + (W + 200) + ' -200 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
+      fillLinearGradientStartPoint: { x: 0, y: 0 },
+      fillLinearGradientEndPoint: { x: 0, y: H },
+      fillLinearGradientColorStops: [0, '#030610', 0.5, '#061019', 1, '#02040a']
+    }));
+
+    // рама стены
+    g.add(new (K().Path)({
+      data: 'M40 170 L1160 150 L1160 1060 L40 1080 Z',
+      fill: '#070e18', stroke: '#132436', strokeWidth: 6
+    }));
+
+    // сетка экранов 3 × 2
+    const cw = 356, chh = 416;
+    const screens = [];
+    for (let i = 0; i < 6; i++) {
+      const col = i % 3, row = Math.floor(i / 3);
+      const x = 66 + col * 364, y = 196 + row * 432;
+      const gs = new (K().Group)();
+      gs.add(new (K().Path)({
+        data: 'M' + x + ' ' + y + ' L' + (x + cw) + ' ' + y + ' L' + (x + cw) + ' ' + (y + chh) + ' L' + x + ' ' + (y + chh) + ' Z',
+        fill: '#04101a', stroke: '#1b3b4c', strokeWidth: 4
+      }));
+      gs.add(new (K().Path)({
+        data: 'M' + (x + 8) + ' ' + (y + 8) + ' L' + (x + cw - 8) + ' ' + (y + 8) + ' L' + (x + cw - 8) + ' ' + (y + chh - 46) + ' L' + (x + 8) + ' ' + (y + chh - 46) + ' Z',
+        fill: '#05161f'
+      }));
+      gs.add(new (K().Line)({
+        points: [x + 8, y + chh - 46, x + cw - 8, y + chh - 46],
+        stroke: 'rgba(157,246,255,0.18)', strokeWidth: 2
+      }));
+      // подпись-полоска
+      gs.add(new (K().Line)({
+        points: [x + 22, y + chh - 22, x + 92 + (i * 41) % 150, y + chh - 22],
+        stroke: 'rgba(157,246,255,0.35)', strokeWidth: 4, lineCap: 'round'
+      }));
+      g.add(gs);
+      screens.push({ x: x, y: y, w: cw, h: chh - 46, g: gs, idx: i });
+    }
+
+    // содержимое экранов
+    // 1) срез метеорита: концентрические кольца и прожилки
+    (function (s0) {
+      const cx = s0.x + s0.w / 2, cy = s0.y + s0.h / 2;
+      for (let i = 1; i <= 5; i++) {
+        g.add(new (K().Ellipse)({
+          x: cx, y: cy, radiusX: 22 + i * 26, radiusY: 20 + i * 24,
+          stroke: 'rgba(157,246,255,' + (0.42 - i * 0.05) + ')', strokeWidth: 2,
+          rotation: -8 + i * 3
+        }));
+      }
+      for (let i = 0; i < 14; i++) {
+        const a = i / 14 * Math.PI * 2;
+        g.add(new (K().Line)({
+          points: [cx + Math.cos(a) * 46, cy + Math.sin(a) * 42,
+            cx + Math.cos(a + 0.2) * 150, cy + Math.sin(a + 0.14) * 136],
+          stroke: 'rgba(180,255,240,0.28)', strokeWidth: 2
+        }));
+      }
+      g.add(new (K().Circle)({ x: cx, y: cy, radius: 17, fill: 'rgba(220,255,252,0.55)' }));
+    })(screens[0]);
+
+    // 2) график: осциллограмма
+    (function (s0) {
+      const base = s0.y + s0.h * 0.62;
+      let d = 'M' + (s0.x + 18) + ' ' + base;
+      for (let i = 0; i < 46; i++) {
+        const x = s0.x + 18 + i * 7;
+        const amp = Math.abs(n.noise2D(i * 0.4, 3)) * 90;
+        d += ' L' + r(x) + ' ' + r(base - amp + (i % 7 === 0 ? -40 : 0));
+      }
+      g.add(new (K().Path)({ data: d, stroke: '#8affd6', strokeWidth: 3, opacity: 0.75 }));
+      g.add(new (K().Line)({
+        points: [s0.x + 18, base + 26, s0.x + s0.w - 18, base + 26],
+        stroke: 'rgba(138,255,214,0.2)', strokeWidth: 2
+      }));
+      for (let i = 0; i < 3; i++) {
+        g.add(new (K().Circle)({
+          x: s0.x + 60 + i * 90, y: s0.y + 60 + i * 14, radius: 4, fill: '#8affd6', opacity: 0.6
+        }));
+      }
+    })(screens[1]);
+
+    // 3) схема станции: ярусы
+    (function (s0) {
+      const cx = s0.x + s0.w / 2;
+      for (let i = 0; i < 7; i++) {
+        const yy = s0.y + 46 + i * 42;
+        const ww = 120 - Math.abs(i - 3) * 14;
+        g.add(new (K().Path)({
+          data: 'M' + (cx - ww) + ' ' + yy + ' L' + (cx + ww) + ' ' + yy + ' L' + (cx + ww * 0.86) + ' ' + (yy + 16) + ' L' + (cx - ww * 0.86) + ' ' + (yy + 16) + ' Z',
+          fill: i === 5 ? 'rgba(255,122,92,0.28)' : 'rgba(157,246,255,0.14)',
+          stroke: 'rgba(157,246,255,0.35)', strokeWidth: 1.6
+        }));
+      }
+      g.add(new (K().Line)({
+        points: [cx, s0.y + 30, cx, s0.y + s0.h - 26],
+        stroke: 'rgba(255,255,255,0.18)', strokeWidth: 2
+      }));
+    })(screens[2]);
+
+    // 4) запись: лицо-силуэт и таймкод
+    (function (s0) {
+      const cx = s0.x + s0.w / 2, cy = s0.y + s0.h * 0.46;
+      g.add(new (K().Path)({
+        data: 'M' + cx + ' ' + (cy - 92) + ' C' + (cx + 62) + ' ' + (cy - 92) + ' ' + (cx + 86) + ' ' + (cy - 24) + ' ' + (cx + 74) + ' ' + (cy + 26) +
+          ' C' + (cx + 64) + ' ' + (cy + 74) + ' ' + (cx + 34) + ' ' + (cy + 104) + ' ' + cx + ' ' + (cy + 104) +
+          ' C' + (cx - 34) + ' ' + (cy + 104) + ' ' + (cx - 64) + ' ' + (cy + 74) + ' ' + (cx - 74) + ' ' + (cy + 26) +
+          ' C' + (cx - 86) + ' ' + (cy - 24) + ' ' + (cx - 62) + ' ' + (cy - 92) + ' ' + cx + ' ' + (cy - 92) + ' Z',
+        fill: 'rgba(157,246,255,0.12)', stroke: 'rgba(157,246,255,0.5)', strokeWidth: 2
+      }));
+      g.add(new (K().Path)({
+        data: 'M' + (cx - 96) + ' ' + (cy + 132) + ' C' + (cx - 70) + ' ' + (cy + 84) + ' ' + (cx + 70) + ' ' + (cy + 84) + ' ' + (cx + 96) + ' ' + (cy + 132) + ' Z',
+        fill: 'rgba(157,246,255,0.10)', stroke: 'rgba(157,246,255,0.35)', strokeWidth: 2
+      }));
+      for (let i = 0; i < 3; i++) {
+        g.add(new (K().Line)({
+          points: [s0.x + 24, s0.y + 30 + i * 12, s0.x + 24 + 60 + i * 22, s0.y + 30 + i * 12],
+          stroke: 'rgba(255,140,110,0.55)', strokeWidth: 3
+        }));
+      }
+    })(screens[3]);
+
+    // 5) список станций
+    (function (s0) {
+      for (let i = 0; i < 7; i++) {
+        const yy = s0.y + 54 + i * 40;
+        g.add(new (K().Circle)({
+          x: s0.x + 34, y: yy - 5, radius: 5,
+          fill: i < 4 ? '#8affd6' : '#2b4a55', opacity: 0.85
+        }));
+        g.add(new (K().Line)({
+          points: [s0.x + 52, yy - 5, s0.x + 52 + 120 + (i * 37) % 140, yy - 5],
+          stroke: i < 4 ? 'rgba(138,255,214,0.5)' : 'rgba(120,160,180,0.25)', strokeWidth: 4, lineCap: 'round'
+        }));
+      }
+    })(screens[4]);
+
+    // 6) таймлайн
+    (function (s0) {
+      const y0 = s0.y + s0.h * 0.55;
+      g.add(new (K().Line)({
+        points: [s0.x + 22, y0, s0.x + s0.w - 22, y0],
+        stroke: 'rgba(157,246,255,0.35)', strokeWidth: 3
+      }));
+      for (let i = 0; i < 6; i++) {
+        const x = s0.x + 34 + i * 52;
+        g.add(new (K().Line)({
+          points: [x, y0 - 12, x, y0 + 12],
+          stroke: 'rgba(157,246,255,0.45)', strokeWidth: 2
+        }));
+      }
+      g.add(new (K().Line)({
+        points: [s0.x + 34 + 4 * 52, y0 - 60, s0.x + 34 + 4 * 52, y0 + 60],
+        stroke: '#ff7a5c', strokeWidth: 4
+      }));
+      g.add(new (K().Circle)({ x: s0.x + 34 + 4 * 52, y: y0 - 60, radius: 7, fill: '#ff7a5c' }));
+    })(screens[5]);
+
+    // пыль и лёгкий скан
+    const scan = new (K().Group)();
+    scan.add(new (K().Line)({
+      points: [40, 200, 1160, 190], stroke: 'rgba(157,246,255,0.16)', strokeWidth: 26
+    }));
+    g.add(scan);
+
+    // пол
+    g.add(new (K().Path)({
+      data: 'M-200 1180 L' + (W + 200) + ' 1160 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
+      fillLinearGradientStartPoint: { x: 0, y: 1160 },
+      fillLinearGradientEndPoint: { x: 0, y: H },
+      fillLinearGradientColorStops: [0, '#0a1520', 0.4, '#050b12', 1, '#02040a']
+    }));
+    // отсвет экранов на полу
+    g.add(new (K().Path)({
+      data: 'M120 1180 L1080 1164 L1040 1330 L150 1346 Z',
+      fillLinearGradientStartPoint: { x: 0, y: 1164 },
+      fillLinearGradientEndPoint: { x: 0, y: 1346 },
+      fillLinearGradientColorStops: [0, 'rgba(110,220,235,0.10)', 1, 'rgba(110,220,235,0)']
+    }));
+    return { screens: screens, scan: scan };
+  };
+
+  /* --------------------------------------------------------- 29. заваренная переборка */
+  Cine.setSealedBulkhead = function (root, p) {
+    const g = new (K().Group)();
+    root.add(g);
+    const S = Simplex();
+    const n = new S(991);
+    g.add(new (K().Path)({
+      data: 'M-200 -200 L' + (W + 200) + ' -200 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
+      fillLinearGradientStartPoint: { x: 0, y: 0 },
+      fillLinearGradientEndPoint: { x: 0, y: H },
+      fillLinearGradientColorStops: [0, '#080d12', 0.5, '#0c151b', 1, '#04080b']
+    }));
+    // рёбра стен
+    for (let i = 0; i < 9; i++) {
+      const x = -60 + i * 160;
+      g.add(new (K().Path)({
+        data: 'M' + x + ' 60 L' + (x + 54) + ' 60 L' + (x + 54) + ' 1500 L' + x + ' 1500 Z',
+        fill: '#0a141a', stroke: '#14232b', strokeWidth: 2, opacity: 0.9
+      }));
+    }
+    // переборка
+    g.add(new (K().Path)({
+      data: 'M190 120 L1010 120 L1010 1470 L190 1470 Z',
+      fillLinearGradientStartPoint: { x: 190, y: 0 },
+      fillLinearGradientEndPoint: { x: 1010, y: 0 },
+      fillLinearGradientColorStops: [0, '#121f26', 0.5, '#1a2c34', 1, '#0d181e'],
+      stroke: '#254048', strokeWidth: 8
+    }));
+    // контур двери внутри переборки
+    g.add(new (K().Path)({
+      data: 'M330 250 C480 190 720 190 870 250 L880 1400 L320 1400 Z',
+      fill: '#16262d', stroke: '#2b4a54', strokeWidth: 5
+    }));
+    // сварные швы: рваные полосы
+    for (let i = 0; i < 5; i++) {
+      const yy = 340 + i * 210;
+      g.add(new (K().Path)({
+        data: 'M300 ' + yy + ' C' + (400 + i * 30) + ' ' + (yy - 18) + ' ' + (700 - i * 20) + ' ' + (yy + 20) + ' 900 ' + (yy - 4),
+        stroke: '#3a5b63', strokeWidth: 12, lineCap: 'round', opacity: 0.75
+      }));
+      for (let k = 0; k < 14; k++) {
+        const x = 310 + k * 42;
+        g.add(new (K().Line)({
+          points: [x, yy - 6 + Math.abs(n.noise2D(i * 3 + k, 7)) * 14, x + 16, yy + 4],
+          stroke: '#5d838a', strokeWidth: 2, opacity: 0.5
+        }));
+      }
+    }
+    // заварка по периметру
+    g.add(new (K().Path)({
+      data: 'M300 240 C420 186 740 186 900 244',
+      stroke: '#456b72', strokeWidth: 16, lineCap: 'round', fillEnabled: false
+    }));
+    g.add(new (K().Path)({
+      data: 'M300 240 C420 186 740 186 900 244',
+      stroke: 'rgba(255,170,110,0.25)', strokeWidth: 5, lineCap: 'round', fillEnabled: false
+    }));
+    // знак «не открывать»: треугольник и полосы
+    g.add(new (K().Path)({
+      data: 'M600 690 L690 850 L510 850 Z',
+      fill: '#1a2126', stroke: '#d9a441', strokeWidth: 6
+    }));
+    g.add(new (K().Path)({
+      data: 'M600 726 L600 792',
+      stroke: '#d9a441', strokeWidth: 9, lineCap: 'round', fillEnabled: false
+    }));
+    g.add(new (K().Circle)({ x: 600, y: 816, radius: 7, fill: '#d9a441' }));
+    // трафаретная надпись — прямоугольные штрихи вместо букв
+    for (let i = 0; i < 9; i++) {
+      g.add(new (K().Line)({
+        points: [452 + i * 34, 900, 452 + i * 34 + 22, 900],
+        stroke: 'rgba(217,164,65,0.5)', strokeWidth: 8, lineCap: 'butt'
+      }));
+    }
+    // автоген: резаная полоса и искры
+    const cut = new (K().Group)();
+    cut.add(new (K().Path)({
+      data: 'M330 1180 C450 1130 760 1130 872 1180',
+      stroke: '#ff9a5c', strokeWidth: 5, lineCap: 'round', fillEnabled: false
+    }));
+    cut.add(new (K().Path)({
+      data: 'M330 1180 C450 1130 760 1130 872 1180',
+      stroke: 'rgba(255,240,180,0.5)', strokeWidth: 2, lineCap: 'round', fillEnabled: false
+    }));
+    for (let i = 0; i < 16; i++) {
+      cut.add(new (K().Circle)({
+        x: 340 + ((i * 61) % 520), y: 1120 + ((i * 37) % 90),
+        radius: 1.6 + (i % 3), fill: i % 3 ? '#ffd166' : '#ffffff',
+        shadowColor: '#ff9a5c', shadowBlur: 12, opacity: 0.9
+      }));
+    }
+    g.add(cut);
+    // ржавые потёки под швами
+    for (let i = 0; i < 16; i++) {
+      const x = 300 + i * 36;
+      const yy = 340 + (i % 5) * 210;
+      g.add(new (K().Path)({
+        data: 'M' + x + ' ' + yy + ' C' + (x + 4) + ' ' + (yy + 40) + ' ' + (x - 3) + ' ' + (yy + 70) + ' ' + (x + 2) + ' ' + (yy + 96),
+        stroke: 'rgba(140,80,45,0.18)', strokeWidth: 5, lineCap: 'round', fillEnabled: false
+      }));
+    }
+    // сигнальная полоса по низу переборки
+    for (let i = 0; i < 18; i++) {
+      g.add(new (K().Path)({
+        data: 'M' + (200 + i * 45) + ' 1400 L' + (238 + i * 45) + ' 1400 L' + (222 + i * 45) + ' 1452 L' + (184 + i * 45) + ' 1452 Z',
+        fill: i % 2 ? 'rgba(217,164,65,0.20)' : 'rgba(20,24,26,0.5)'
+      }));
+    }
+    // маховик-запор сбоку
+    g.add(new (K().Circle)({ x: 940, y: 700, radius: 62, fillEnabled: false, stroke: '#3a5b63', strokeWidth: 10 }));
+    g.add(new (K().Circle)({ x: 940, y: 700, radius: 16, fill: '#2a444b' }));
+    for (let i = 0; i < 5; i++) {
+      const a = i / 5 * Math.PI * 2;
+      g.add(new (K().Line)({
+        points: [940 + Math.cos(a) * 16, 700 + Math.sin(a) * 16, 940 + Math.cos(a) * 62, 700 + Math.sin(a) * 62],
+        stroke: '#3a5b63', strokeWidth: 7, lineCap: 'round'
+      }));
+    }
+    // пол
+    g.add(new (K().Path)({
+      data: 'M-200 1470 L' + (W + 200) + ' 1470 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
+      fillLinearGradientStartPoint: { x: 0, y: 1470 },
+      fillLinearGradientEndPoint: { x: 0, y: H },
+      fillLinearGradientColorStops: [0, '#0a1419', 0.5, '#050b0e', 1, '#020507']
+    }));
+    // мусор: обрезки, болты, брошенный инструмент
+    for (let i = 0; i < 14; i++) {
+      const x = 90 + ((i * 173) % 1020);
+      const yy = 1520 + ((i * 97) % 200);
+      g.add(new (K().Path)({
+        data: 'M' + x + ' ' + yy + ' L' + (x + 40 + (i % 3) * 22) + ' ' + (yy - 8) + ' L' + (x + 46) + ' ' + (yy + 10) + ' L' + (x + 6) + ' ' + (yy + 14) + ' Z',
+        fill: '#132026', stroke: '#1e3440', strokeWidth: 2
+      }));
+    }
+    for (let i = 0; i < 9; i++) {
+      g.add(new (K().Circle)({
+        x: 140 + ((i * 263) % 900), y: 1640 + ((i * 71) % 110), radius: 5,
+        fill: '#243a44', stroke: '#0b1418', strokeWidth: 2
+      }));
+    }
+    for (let i = 0; i < 12; i++) {
+      g.add(new (K().Line)({
+        points: [120 + i * 90, 1480, 90 + i * 96, 1760],
+        stroke: '#132026', strokeWidth: 3
+      }));
+    }
+    // отсвет искр на полу
+    g.add(new (K().Ellipse)({
+      x: 600, y: 1500, radiusX: 340, radiusY: 46,
+      fillRadialGradientStartPoint: { x: 0, y: 0 },
+      fillRadialGradientEndPoint: { x: 0, y: 0 },
+      fillRadialGradientRadius: 340,
+      fillRadialGradientColorStops: [0, 'rgba(255,150,90,0.14)', 1, 'rgba(255,150,90,0)']
+    }));
+    return { cut: cut, door: { x: 600, y: 1470 } };
+  };
+
+  /* --------------------------------------------------------- 30. отсек с криокамерой */
+  Cine.setCryoBay = function (root, p) {
+    const g = new (K().Group)();
+    root.add(g);
+    const S = Simplex();
+    const n = new S(2024);
+    const co = 'rgba(190,240,255,';
+
+    g.add(new (K().Path)({
+      data: 'M-200 -200 L' + (W + 200) + ' -200 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
+      fillLinearGradientStartPoint: { x: 0, y: 0 },
+      fillLinearGradientEndPoint: { x: 0, y: H },
+      fillLinearGradientColorStops: [0, '#061019', 0.42, '#0b1c25', 0.72, '#08151c', 1, '#02070a']
+    }));
+
+    // иней по стенам — ветвистые наросты
+    for (let i = 0; i < 26; i++) {
+      const x = -40 + i * 50;
+      const len = 90 + Math.abs(n.noise2D(i, 4)) * 220;
+      g.add(new (K().Path)({
+        data: 'M' + x + ' -40 L' + r(x + n.noise2D(i, 9) * 40) + ' ' + r(len) + ' L' + r(x + 26) + ' ' + r(len * 0.5),
+        stroke: co + '0.12)', strokeWidth: 3, lineCap: 'round'
+      }));
+    }
+    // трубы
+    for (let i = 0; i < 3; i++) {
+      g.add(new (K().Path)({
+        data: 'M-60 ' + (150 + i * 46) + ' L1260 ' + (140 + i * 46),
+        stroke: '#132832', strokeWidth: 18 - i * 3, opacity: 0.9
+      }));
+      g.add(new (K().Path)({
+        data: 'M-60 ' + (150 + i * 46) + ' L1260 ' + (140 + i * 46),
+        stroke: co + '0.10)', strokeWidth: 6 - i
+      }));
+    }
+    // вентиляционные решётки
+    [[90, 700], [1030, 760]].forEach(function (v) {
+      g.add(new (K().Path)({
+        data: 'M' + v[0] + ' ' + v[1] + ' L' + (v[0] + 130) + ' ' + v[1] + ' L' + (v[0] + 130) + ' ' + (v[1] + 300) + ' L' + v[0] + ' ' + (v[1] + 300) + ' Z',
+        fill: '#091820', stroke: '#1b3340', strokeWidth: 4
+      }));
+      for (let i = 0; i < 9; i++) {
+        g.add(new (K().Line)({
+          points: [v[0] + 12, v[1] + 22 + i * 30, v[0] + 118, v[1] + 22 + i * 30],
+          stroke: '#173240', strokeWidth: 5
+        }));
+      }
+    });
+
+    // боковая камера справа (частично в кадре)
+    g.add(new (K().Path)({
+      data: 'M980 430 C1040 400 1140 400 1180 430 L1180 1440 L980 1440 Z',
+      fillLinearGradientStartPoint: { x: 980, y: 0 },
+      fillLinearGradientEndPoint: { x: 1180, y: 0 },
+      fillLinearGradientColorStops: [0, '#16333d', 0.5, '#0f262e', 1, '#081820'],
+      stroke: '#26454f', strokeWidth: 5
+    }));
+    g.add(new (K().Circle)({
+      x: 1084, y: 760, radius: 74,
+      fillLinearGradientStartPoint: { x: 0, y: 686 },
+      fillLinearGradientEndPoint: { x: 0, y: 834 },
+      fillLinearGradientColorStops: [0, '#0b2a33', 1, '#061a20']
+    }));
+    g.add(new (K().Circle)({ x: 1084, y: 760, radius: 74, fillEnabled: false, stroke: co + '0.28)', strokeWidth: 6 }));
+
+    // главная камера
+    g.add(new (K().Path)({
+      data: 'M250 1520 L300 470 C310 300 460 214 600 214 C740 214 890 300 900 470 L950 1520 Z',
+      fillLinearGradientStartPoint: { x: 250, y: 0 },
+      fillLinearGradientEndPoint: { x: 950, y: 0 },
+      fillLinearGradientColorStops: [0, '#0a1d26', 0.24, '#1d4350', 0.5, '#27575f', 0.76, '#173540', 1, '#08181f'],
+      stroke: '#2d5560', strokeWidth: 6
+    }));
+    // стекло
+    g.add(new (K().Path)({
+      data: 'M330 1470 L372 512 C382 372 486 306 600 306 C714 306 818 372 828 512 L870 1470 Z',
+      fillLinearGradientStartPoint: { x: 330, y: 300 },
+      fillLinearGradientEndPoint: { x: 870, y: 1470 },
+      fillLinearGradientColorStops: [0, 'rgba(120,200,220,0.20)', 0.35, 'rgba(30,80,100,0.42)', 1, 'rgba(6,26,34,0.75)']
+    }));
+    // внутренний холодный свет
+    g.add(new (K().Ellipse)({
+      x: 600, y: 900, radiusX: 210, radiusY: 420,
+      fillRadialGradientStartPoint: { x: 0, y: 0 },
+      fillRadialGradientEndPoint: { x: 0, y: 0 },
+      fillRadialGradientRadius: 400,
+      fillRadialGradientColorStops: [0, 'rgba(120,220,255,0.14)', 1, 'rgba(120,220,255,0)']
+    }));
+    // иней по стеклу снизу: сплошная полоса с рваным верхним краем
+    (function () {
+      let d = 'M348 1466';
+      for (let i = 0; i <= 20; i++) {
+        const x = 348 + i * 26;
+        const hh = 54 + Math.abs(n.noise2D(i * 1.7, 12)) * 120;
+        d += ' L' + r(x) + ' ' + r(1466 - hh);
+      }
+      d += ' L872 1466 Z';
+      g.add(new (K().Path)({
+        data: d,
+        fillLinearGradientStartPoint: { x: 0, y: 1466 },
+        fillLinearGradientEndPoint: { x: 0, y: 1200 },
+        fillLinearGradientColorStops: [0, 'rgba(190,240,255,0.34)', 0.5, 'rgba(170,225,250,0.16)', 1, 'rgba(150,210,240,0)']
+      }));
+      // редкие сосульки вверх
+      for (let i = 0; i < 9; i++) {
+        const x = 372 + i * 56;
+        g.add(new (K().Path)({
+          data: 'M' + x + ' 1400 L' + (x + 9) + ' ' + r(1330 - (i % 4) * 34) + ' L' + (x + 20) + ' 1402 Z',
+          fill: 'rgba(200,245,255,0.14)'
+        }));
+      }
+    })();
+    // рама, болты
+    g.add(new (K().Path)({
+      data: 'M250 1520 L300 470 C310 300 460 214 600 214 C740 214 890 300 900 470 L950 1520 Z',
+      stroke: '#38636e', strokeWidth: 4, fillEnabled: false, opacity: 0.7
+    }));
+    [298, 902].forEach(function (bx, side) {
+      for (let i = 0; i < 9; i++) {
+        const t = i / 8;
+        const x = bx + (side ? -1 : 1) * t * 22;
+        const y = 560 + i * 108;
+        g.add(new (K().Circle)({
+          x: r(x), y: r(y), radius: 7,
+          fill: '#2a4f59', stroke: '#0a1c22', strokeWidth: 2
+        }));
+      }
+    });
+    // нижняя тумба
+    g.add(new (K().Path)({
+      data: 'M232 1440 L968 1440 L1000 1600 L200 1600 Z',
+      fillLinearGradientStartPoint: { x: 0, y: 1440 },
+      fillLinearGradientEndPoint: { x: 0, y: 1600 },
+      fillLinearGradientColorStops: [0, '#1b3640', 0.5, '#0e2129', 1, '#061117'],
+      stroke: '#26454f', strokeWidth: 4
+    }));
+    for (let i = 0; i < 5; i++) {
+      g.add(new (K().Circle)({
+        x: 300 + i * 150, y: 1520, radius: 9,
+        fill: i === 2 ? '#8affd6' : '#2b4f59', opacity: 0.8,
+        shadowColor: '#8affd6', shadowBlur: i === 2 ? 14 : 0
+      }));
+    }
+
+    // пол: лёд и наледь
+    g.add(new (K().Path)({
+      data: 'M-200 1600 L' + (W + 200) + ' 1600 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
+      fillLinearGradientStartPoint: { x: 0, y: 1600 },
+      fillLinearGradientEndPoint: { x: 0, y: H },
+      fillLinearGradientColorStops: [0, '#0d212a', 0.35, '#071219', 1, '#02060a']
+    }));
+    for (let i = 0; i < 9; i++) {
+      const x = 80 + i * 130;
+      g.add(new (K().Path)({
+        data: 'M' + x + ' 1620 L' + (x + 60) + ' 1612 L' + (x + 40) + ' 1690 L' + (x - 14) + ' 1698 Z',
+        fill: 'rgba(150,220,245,0.07)'
+      }));
+    }
+    // пар: плоские шлейфы у пола
+    const mist = new (K().Group)();
+    for (let i = 0; i < 4; i++) {
+      mist.add(new (K().Ellipse)({
+        x: 160 + i * 300, y: 1620 + (i % 2) * 40,
+        radiusX: 300, radiusY: 34,
+        fillRadialGradientStartPoint: { x: 0, y: 0 },
+        fillRadialGradientEndPoint: { x: 0, y: 0 },
+        fillRadialGradientRadius: 300,
+        fillRadialGradientColorStops: [0, 'rgba(200,240,255,0.10)', 1, 'rgba(200,240,255,0)']
+      }));
+    }
+    for (let i = 0; i < 5; i++) {
+      mist.add(new (K().Path)({
+        data: 'M' + (120 + i * 230) + ' 1600 C' + (170 + i * 230) + ' 1520 ' + (90 + i * 230) + ' 1440 ' + (150 + i * 230) + ' 1350',
+        stroke: 'rgba(200,240,255,0.07)', strokeWidth: 26, lineCap: 'round', fillEnabled: false
+      }));
+    }
+    g.add(mist);
+    return { pod: { x: 600, y: 900 }, mist: mist };
+  };
+
+  /** переднее стекло криокамеры — рисовать в s.frame поверх фигуры */
+  Cine.cryoPodFront = function (o) {
+    o = o || {};
+    const g = new (K().Group)();
+    const co = 'rgba(200,245,255,';
+    // стекло с бликом
+    g.add(new (K().Path)({
+      data: 'M330 1470 L372 512 C382 372 486 306 600 306 C714 306 818 372 828 512 L870 1470 Z',
+      fill: 'rgba(120,200,225,0.07)'
+    }));
+    // блик по левой стороне
+    g.add(new (K().Path)({
+      data: 'M382 1420 C388 900 400 620 470 470 C500 410 540 372 580 352',
+      stroke: 'rgba(230,255,255,0.16)', strokeWidth: 26, lineCap: 'round', fillEnabled: false
+    }));
+    g.add(new (K().Path)({
+      data: 'M430 1400 C436 940 450 700 508 540',
+      stroke: 'rgba(230,255,255,0.10)', strokeWidth: 12, lineCap: 'round', fillEnabled: false
+    }));
+    // наледь по низу стекла
+    for (let i = 0; i < 16; i++) {
+      const x = 356 + i * 32;
+      const h = 60 + Math.abs(Math.sin(i * 2.3)) * 180;
+      g.add(new (K().Path)({
+        data: 'M' + x + ' 1472 L' + (x + 6) + ' ' + r(1472 - h) + ' L' + (x + 16) + ' ' + r(1472 - h * 0.6),
+        stroke: co + '0.22)', strokeWidth: 3, lineCap: 'round'
+      }));
+    }
+    // рама уже нарисована в самом сете — здесь только лёгкая внутренняя кромка
+    g.add(new (K().Path)({
+      data: 'M330 1470 L372 512 C382 372 486 306 600 306 C714 306 818 372 828 512 L870 1470',
+      stroke: 'rgba(200,245,255,0.16)', strokeWidth: 5, fillEnabled: false
+    }));
+    // струйки конденсата
+    for (let i = 0; i < 7; i++) {
+      const x = 380 + i * 70;
+      g.add(new (K().Path)({
+        data: 'M' + x + ' ' + (520 + (i % 3) * 60) + ' C' + (x + 4) + ' ' + (640 + i * 20) + ' ' + (x - 6) + ' ' + (760 + i * 30) + ' ' + (x + 2) + ' ' + (900 + i * 24),
+        stroke: co + '0.14)', strokeWidth: 3, fillEnabled: false
+      }));
+    }
+    return g;
+  };
+
 })(window);
