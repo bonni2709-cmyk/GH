@@ -48,9 +48,14 @@ install_image() {
     fail "avdmanager failed: $(tail -n 5 "$WORK/avd.log")"
   fi
   # A small screen keeps the software renderer quick; two cores and 3 GB match what the runner has.
-  local config
-  config="$(find "${ANDROID_AVD_HOME:-$HOME/.android/avd}" "$HOME/.android" -maxdepth 3 -path "*/$AVD.avd/config.ini" 2> /dev/null | head -n1)"
-  [ -f "$config" ] || fail "the AVD configuration file was not found"
+  # avdmanager prints where it put the AVD (the location depends on the SDK tools version).
+  local config dir
+  dir="$(avdmanager list avd 2> /dev/null | sed -n 's/^ *Path: *//p' | head -n1 | tr -d '\r')"
+  config="$dir/config.ini"
+  if [ ! -f "$config" ]; then
+    config="$(find "$HOME" -maxdepth 6 -path "*/$AVD.avd/config.ini" 2> /dev/null | head -n1)"
+  fi
+  [ -f "$config" ] || fail "the AVD configuration file was not found (avdmanager said: $(avdmanager list avd 2>&1 | tr '\n' ' ' | head -c 600))"
   sed -i -E '/^(hw\.lcd\.(width|height|density)|hw\.ramSize|hw\.cpu\.ncore)=/d' "$config"
   printf 'hw.lcd.width=720\nhw.lcd.height=1280\nhw.lcd.density=320\nhw.ramSize=3072\nhw.cpu.ncore=2\n' >> "$config"
 
@@ -60,14 +65,15 @@ install_image() {
 
 boot() {
   adb start-server > /dev/null 2>&1
-  nohup emulator -avd "$AVD" -no-window -no-audio -no-boot-anim -no-snapshot -no-metrics \
+  setsid nohup emulator -avd "$AVD" -no-window -no-audio -no-boot-anim -no-snapshot \
     -gpu swiftshader_indirect -accel on -camera-back none -camera-front none -verbose \
-    > "$WORK/emulator.log" 2>&1 &
+    > "$WORK/emulator.log" 2>&1 < /dev/null &
   local pid=$! started elapsed
   started="$(date +%s)"
   while :; do
     elapsed=$(($(date +%s) - started))
-    if ! kill -0 "$pid" 2> /dev/null; then
+    # The launcher may hand over to a qemu child, so either of the two counts as alive.
+    if ! kill -0 "$pid" 2> /dev/null && ! pgrep -f 'qemu-system' > /dev/null 2>&1; then
       fail "the emulator process exited after ${elapsed}s"
     fi
     if [ "$(adb shell getprop sys.boot_completed 2> /dev/null | tr -d '\r')" = "1" ]; then
