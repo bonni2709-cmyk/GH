@@ -464,7 +464,7 @@
       }));
       g.add(new (K().Path)({
         data: 'M' + (sx - 44) + ' ' + sy + ' L' + (sx - 40) + ' ' + (sy - 96) + ' L' + (sx + 40) + ' ' + (sy - 100) + ' L' + (sx + 42) + ' ' + (sy - 4),
-        fill: 'none', stroke: '#0b1c22', strokeWidth: 6, opacity: 0.9
+        fillEnabled: false, stroke: '#0b1c22', strokeWidth: 6, opacity: 0.9
       }));
       g.add(new (K().Path)({
         data: 'M' + (sx - 36) + ' ' + (sy + 36) + ' L' + (sx - 30) + ' ' + (sy + 130) + ' M' + (sx + 34) + ' ' + (sy + 32) + ' L' + (sx + 40) + ' ' + (sy + 126),
@@ -887,61 +887,241 @@
   Cine.setBridge = function (root, p) {
     const g = new (K().Group)();
     root.add(g);
+    const lt = p.light || '#8ff0ff';
+
+    /* --- стена --- */
     g.add(new (K().Path)({
       data: 'M-200 -200 L' + (W + 200) + ' -200 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
       fillLinearGradientStartPoint: { x: 0, y: 0 },
       fillLinearGradientEndPoint: { x: 0, y: H },
-      fillLinearGradientColorStops: [0, '#04101a', 0.5, '#061a26', 1, '#02080d']
+      fillLinearGradientColorStops: [0, '#04101a', 0.42, '#07202c', 0.72, '#050f16', 1, '#02080d']
     }));
-    // пульт полукольцом
+
+    /* --- потолочная панель и лампа --- */
     g.add(new (K().Path)({
-      data: 'M-100 1180 C300 1060 900 1060 1300 1180 L1300 1560 L-100 1560 Z',
-      fillLinearGradientStartPoint: { x: 0, y: 1060 },
-      fillLinearGradientEndPoint: { x: 0, y: 1560 },
-      fillLinearGradientColorStops: [0, '#17323b', 0.5, '#0d2028', 1, '#061117']
+      data: 'M-200 -200 L' + (W + 200) + ' -200 L' + (W + 200) + ' 120 L840 196 L360 196 L-200 120 Z',
+      fillLinearGradientStartPoint: { x: 0, y: 0 },
+      fillLinearGradientEndPoint: { x: 0, y: 200 },
+      fillLinearGradientColorStops: [0, '#020a0f', 1, '#0a2130']
     }));
+    g.add(new (K().Path)({
+      data: 'M360 196 L840 196 L860 214 L340 214 Z',
+      fill: lt, opacity: 0.55
+    }));
+    // световой конус
+    g.add(new (K().Path)({
+      data: 'M350 210 L850 210 L1010 1180 L190 1180 Z',
+      fillLinearGradientStartPoint: { x: 0, y: 210 },
+      fillLinearGradientEndPoint: { x: 0, y: 1180 },
+      fillLinearGradientColorStops: [0, 'rgba(150,240,255,0.13)', 0.45, 'rgba(150,240,255,0.05)', 1, 'rgba(150,240,255,0)']
+    }));
+
+    /* --- рёбра жёсткости по краям --- */
+    [70, 1060].forEach(function (x) {
+      g.add(new (K().Path)({
+        data: 'M' + x + ' 196 L' + (x + 70) + ' 196 L' + (x + 70) + ' 1250 L' + x + ' 1250 Z',
+        fillLinearGradientStartPoint: { x: x, y: 0 },
+        fillLinearGradientEndPoint: { x: x + 70, y: 0 },
+        fillLinearGradientColorStops: [0, '#081a24', 0.5, '#123747', 1, '#06141c'],
+        opacity: 0.9
+      }));
+      for (let i = 0; i < 6; i++) {
+        g.add(new (K().Circle)({
+          x: x + 35, y: 300 + i * 150, radius: 6,
+          fill: '#0b2430', stroke: '#1d4a58', strokeWidth: 2
+        }));
+      }
+    });
+
+    /* --- три иллюминатора --- */
+    for (let i = 0; i < 3; i++) {
+      const cx = 210 + i * 300, cy = 380, R = 96;
+      g.add(new (K().Circle)({
+        x: cx, y: cy, radius: R + 14, fill: '#061a22', stroke: '#0d2b36', strokeWidth: 4
+      }));
+      // вода за стеклом
+      g.add(new (K().Circle)({
+        x: cx, y: cy, radius: R,
+        fillLinearGradientStartPoint: { x: 0, y: cy - R },
+        fillLinearGradientEndPoint: { x: 0, y: cy + R },
+        fillLinearGradientColorStops: [0, '#0b3340', 0.55, '#05161d', 1, '#020a0e']
+      }));
+      for (let k = 0; k < 9; k++) {
+        const a = (k * 2.399 + i * 1.1) % (Math.PI * 2);
+        const rr = R * (0.24 + (k % 5) * 0.13);
+        g.add(new (K().Circle)({
+          x: cx + Math.cos(a) * rr, y: cy + Math.sin(a) * rr * 0.86,
+          radius: 1.6 + (k % 3), fill: 'rgba(190,250,255,0.5)'
+        }));
+      }
+      // луч сверху
+      g.add(new (K().Path)({
+        data: 'M' + (cx - 46) + ' ' + (cy - R + 8) + ' L' + (cx + 10) + ' ' + (cy - R + 8) + ' L' + (cx + 56) + ' ' + (cy + 12) + ' L' + (cx - 10) + ' ' + (cy + 12) + ' Z',
+        fill: 'rgba(150,240,255,0.09)'
+      }));
+      // обод и зажимы
+      g.add(new (K().Circle)({ x: cx, y: cy, radius: R, fillEnabled: false, stroke: '#2b5560', strokeWidth: 12 }));
+      g.add(new (K().Circle)({ x: cx, y: cy, radius: R - 9, fillEnabled: false, stroke: '#04141a', strokeWidth: 5, opacity: 0.9 }));
+      for (let b = 0; b < 8; b++) {
+        const a = b / 8 * Math.PI * 2 + 0.4;
+        g.add(new (K().Circle)({
+          x: cx + Math.cos(a) * (R + 6), y: cy + Math.sin(a) * (R + 6), radius: 6,
+          fill: '#122f3a', stroke: '#24505d', strokeWidth: 2
+        }));
+      }
+      // блик
+      g.add(new (K().Path)({
+        data: 'M' + (cx - 62) + ' ' + (cy - 34) + ' C' + (cx - 34) + ' ' + (cy - 76) + ' ' + (cx + 22) + ' ' + (cy - 82) + ' ' + (cx + 56) + ' ' + (cy - 54),
+        stroke: 'rgba(210,255,252,0.22)', strokeWidth: 9, lineCap: 'round'
+      }));
+    }
+
+    /* --- швы панелей --- */
+    [360, 660, 960].forEach(function (x) {
+      g.add(new (K().Path)({
+        data: 'M' + x + ' 240 L' + (x - 10) + ' 1120',
+        stroke: 'rgba(90,170,190,0.10)', strokeWidth: 3
+      }));
+    });
+
+    /* --- пульт полукольцом --- */
+    g.add(new (K().Path)({
+      data: 'M-100 1180 C300 1060 900 1060 1300 1180 L1300 1470 L-100 1470 Z',
+      fillLinearGradientStartPoint: { x: 0, y: 1060 },
+      fillLinearGradientEndPoint: { x: 0, y: 1470 },
+      fillLinearGradientColorStops: [0, '#1a3945', 0.35, '#102b35', 1, '#061117']
+    }));
+    // кромка
     g.add(new (K().Path)({
       data: 'M-100 1180 C300 1060 900 1060 1300 1180',
-      stroke: p.light, strokeWidth: 3, opacity: 0.4
+      stroke: lt, strokeWidth: 4, opacity: 0.5
     }));
+    g.add(new (K().Path)({
+      data: 'M-100 1188 C300 1070 900 1070 1300 1188 L1300 1214 C900 1096 300 1096 -100 1214 Z',
+      fill: 'rgba(150,240,255,0.07)'
+    }));
+    // подсветка под кромкой
+    g.add(new (K().Path)({
+      data: 'M-60 1216 C300 1100 900 1100 1260 1216 L1260 1300 C900 1190 300 1190 -60 1300 Z',
+      fillLinearGradientStartPoint: { x: 0, y: 1110 },
+      fillLinearGradientEndPoint: { x: 0, y: 1300 },
+      fillLinearGradientColorStops: [0, 'rgba(150,240,255,0.10)', 1, 'rgba(150,240,255,0)']
+    }));
+
+    // лампочки по кромке
     for (let i = 0; i < 26; i++) {
       const t = i / 25;
       const x = -60 + t * 1320;
-      const y = 1200 - Math.sin(t * Math.PI) * 96;
+      const y = 1204 - Math.sin(t * Math.PI) * 96;
       g.add(new (K().Circle)({
-        x: x, y: y, radius: 4.4,
+        x: x, y: y, radius: 4.2,
         fill: i % 5 === 0 ? '#ff8f5a' : (i % 3 === 0 ? '#ffd166' : '#8fe8f0'),
-        opacity: 0.7
+        opacity: 0.75,
+        shadowColor: i % 5 === 0 ? '#ff8f5a' : '#8fe8f0', shadowBlur: 8
       }));
     }
-    // кресло
-    g.add(new (K().Path)({
-      data: 'M760 1180 C860 1140 990 1150 1040 1230 L1040 1560 L760 1560 Z',
-      fill: '#0d1c22', stroke: '#061117', strokeWidth: 3
-    }));
-    g.add(new (K().Path)({
-      data: 'M780 1240 C870 1210 980 1220 1016 1280',
-      stroke: '#2b5a68', strokeWidth: 3, opacity: 0.5
-    }));
-    // иллюминаторы
-    for (let i = 0; i < 3; i++) {
-      g.add(new (K().Circle)({
-        x: 210 + i * 300, y: 380, radius: 96,
-        fill: 'rgba(10,40,54,0.5)', stroke: '#1b3d47', strokeWidth: 8
+
+    /* --- экраны на пульте (наклонные трапеции) --- */
+    const screens = [
+      { x: 128, y: 1150, w: 220, h: 108, tilt: -8, hue: '#6fe3ff' },
+      { x: 470, y: 1118, w: 262, h: 120, tilt: 0, hue: '#9dffd8' },
+      { x: 862, y: 1152, w: 220, h: 106, tilt: 8, hue: '#ffb98a' }
+    ];
+    screens.forEach(function (sc) {
+      const x0 = sc.x, y0 = sc.y, x1 = sc.x + sc.w, y1 = sc.y + sc.h;
+      const s2 = sc.tilt * 0.9;
+      g.add(new (K().Path)({
+        data: 'M' + x0 + ' ' + (y0 + s2) + ' L' + x1 + ' ' + (y0 - s2) + ' L' + (x1 - 10) + ' ' + (y1 - s2) + ' L' + (x0 + 10) + ' ' + (y1 + s2) + ' Z',
+        fill: '#04222b', stroke: '#1b4a58', strokeWidth: 4
       }));
-      g.add(new (K().Circle)({
-        x: 210 + i * 300, y: 380, radius: 78,
+      g.add(new (K().Path)({
+        data: 'M' + (x0 + 12) + ' ' + (y0 + 10 + s2) + ' L' + (x1 - 12) + ' ' + (y0 + 10 - s2) + ' L' + (x1 - 18) + ' ' + (y0 + 40 - s2) + ' L' + (x0 + 18) + ' ' + (y0 + 40 + s2) + ' Z',
+        fill: sc.hue, opacity: 0.10
+      }));
+      // строчки данных
+      for (let r2 = 0; r2 < 5; r2++) {
+        const ly = y0 + 26 + r2 * 16;
+        const lw = 40 + ((r2 * 53 + sc.x) % 120);
+        g.add(new (K().Path)({
+          data: 'M' + (x0 + 20) + ' ' + (ly + s2) + ' L' + (x0 + 20 + lw) + ' ' + (ly - s2 * 0.6),
+          stroke: sc.hue, strokeWidth: r2 === 0 ? 5 : 3, opacity: 0.30 + r2 * 0.10, lineCap: 'round'
+        }));
+      }
+      // рампа кнопок
+      for (let b = 0; b < 6; b++) {
+        g.add(new (K().Circle)({
+          x: x0 + 26 + b * 22, y: y1 - 18 - s2 * 0.2, radius: 4,
+          fill: b === 1 ? '#ff8f5a' : '#8fe8f0', opacity: 0.55
+        }));
+      }
+    });
+
+    /* --- кофе на пульте --- */
+    g.add(new (K().Path)({
+      data: 'M700 1088 L744 1088 L738 1146 L706 1146 Z',
+      fill: '#122a33', stroke: '#2a5a68', strokeWidth: 3
+    }));
+    g.add(new (K().Path)({
+      data: 'M700 1088 L744 1088 L743 1098 L701 1098 Z',
+      fill: '#c8a06a', opacity: 0.85
+    }));
+    g.add(new (K().Path)({
+      data: 'M744 1100 C760 1102 760 1126 742 1128',
+      stroke: '#2a5a68', strokeWidth: 5, fillEnabled: false
+    }));
+    for (let i = 0; i < 3; i++) {
+      g.add(new (K().Path)({
+        data: 'M' + (712 + i * 12) + ' 1082 C' + (706 + i * 12) + ' 1060 ' + (720 + i * 12) + ' 1046 ' + (714 + i * 12) + ' 1024',
+        stroke: 'rgba(230,245,250,0.18)', strokeWidth: 4, lineCap: 'round', fillEnabled: false
+      }));
+    }
+
+    /* --- кабели --- */
+    [[120, 1470, 60, 1700], [1120, 1470, 1180, 1740]].forEach(function (c) {
+      g.add(new (K().Path)({
+        data: 'M' + c[0] + ' ' + c[1] + ' C' + (c[0] + 40) + ' ' + (c[1] + 90) + ' ' + (c[2] - 30) + ' ' + (c[3] - 110) + ' ' + c[2] + ' ' + c[3],
+        stroke: '#0b1d24', strokeWidth: 10, fillEnabled: false, lineCap: 'round'
+      }));
+    });
+
+    /* --- пол и отражения --- */
+    g.add(new (K().Path)({
+      data: 'M-200 1470 L' + (W + 200) + ' 1470 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
+      fillLinearGradientStartPoint: { x: 0, y: 1470 },
+      fillLinearGradientEndPoint: { x: 0, y: H },
+      fillLinearGradientColorStops: [0, '#08161d', 0.4, '#040e13', 1, '#01070a']
+    }));
+    for (let i = 0; i < 7; i++) {
+      const x = 130 + i * 158;
+      g.add(new (K().Ellipse)({
+        x: x, y: 1516 + (i % 2) * 34, radiusX: 84, radiusY: 12,
         fillRadialGradientStartPoint: { x: 0, y: 0 },
         fillRadialGradientEndPoint: { x: 0, y: 0 },
-        fillRadialGradientRadius: 78,
-        fillRadialGradientColorStops: [0, 'rgba(160,235,255,0.12)', 1, 'rgba(160,235,255,0)']
+        fillRadialGradientRadius: 84,
+        fillRadialGradientColorStops: [0, i % 4 === 0 ? 'rgba(255,150,100,0.10)' : 'rgba(140,235,255,0.085)', 1, 'rgba(140,235,255,0)']
       }));
     }
-    // пол
+    // стыки плит
+    for (let i = 0; i < 5; i++) {
+      const yy = 1540 + i * 60;
+      g.add(new (K().Path)({
+        data: 'M-100 ' + yy + ' L' + (W + 100) + ' ' + yy,
+        stroke: 'rgba(120,200,220,0.05)', strokeWidth: 2
+      }));
+    }
+    // блик на полу от пульта
     g.add(new (K().Path)({
-      data: 'M-200 1560 L' + (W + 200) + ' 1560 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
-      fill: '#040d12'
+      data: 'M180 1476 C420 1450 780 1450 1020 1476 L1020 1512 C780 1486 420 1486 180 1512 Z',
+      fill: 'rgba(140,235,255,0.10)'
     }));
+
+    /* --- пыль в воздухе --- */
+    for (let i = 0; i < 18; i++) {
+      g.add(new (K().Circle)({
+        x: 160 + ((i * 137) % 880), y: 330 + ((i * 211) % 760),
+        radius: 1 + (i % 3), fill: 'rgba(200,245,255,0.35)'
+      }));
+    }
     return {};
   };
 
@@ -1269,7 +1449,7 @@
       }));
       g.add(new (K().Path)({
         data: 'M' + (x + 10) + ' 1240 C' + (x + 40) + ' 1180 ' + (x + 120) + ' 1180 ' + (x + 140) + ' 1240',
-        fill: 'none', stroke: '#a9c7cc', strokeWidth: 12, lineCap: 'round', opacity: 0.8
+        fillEnabled: false, stroke: '#a9c7cc', strokeWidth: 12, lineCap: 'round', opacity: 0.8
       }));
       g.add(new (K().Path)({
         data: 'M' + (x + 300) + ' 1230 L' + (x + 370) + ' 1228 L' + (x + 376) + ' 1270 L' + (x + 306) + ' 1272 Z',
@@ -1389,6 +1569,409 @@
       fillLinearGradientStartPoint: { x: 0, y: 1400 },
       fillLinearGradientEndPoint: { x: 0, y: 1750 },
       fillLinearGradientColorStops: [0, 'rgba(40,140,150,0.35)', 1, 'rgba(8,30,36,0.8)']
+    }));
+    return {};
+  };
+
+
+  /* --------------------------------------------------------- 22. затопленная палуба */
+  Cine.setFloodedDeck = function (root, p) {
+    const g = new (K().Group)();
+    root.add(g);
+    const SimplexLib = Simplex();
+    const n = new SimplexLib(8821);
+    // общий тон: грязная зелень воды
+    g.add(new (K().Path)({
+      data: 'M-200 -200 L' + (W + 200) + ' -200 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
+      fillLinearGradientStartPoint: { x: 0, y: 0 },
+      fillLinearGradientEndPoint: { x: 0, y: H },
+      fillLinearGradientColorStops: [0, '#04110f', 0.4, '#08201d', 0.72, '#0a2a25', 1, '#04100f']
+    }));
+    // дальняя переборка с рёбрами
+    g.add(new (K().Path)({
+      data: 'M-100 300 L' + (W + 100) + ' 300 L' + (W + 100) + ' 1240 L-100 1240 Z',
+      fill: '#061614', stroke: '#0d2f2a', strokeWidth: 3, opacity: 0.9
+    }));
+    for (let i = 0; i < 8; i++) {
+      const x = -40 + i * 172;
+      g.add(new (K().Line)({
+        points: [x, 300, x + n.noise2D(i, 2) * 30, 1240],
+        stroke: i % 2 ? '#0b2723' : '#0f3730', strokeWidth: 14 + (i % 3) * 8
+      }));
+    }
+    // ржавые потёки
+    for (let i = 0; i < 16; i++) {
+      const x = 40 + Math.abs(n.noise2D(i, 7)) * 1100;
+      const y0 = 320 + Math.abs(n.noise2D(i, 9)) * 160;
+      const len = 120 + Math.abs(n.noise2D(i, 13)) * 420;
+      g.add(new (K().Line)({
+        points: [x, y0, x + 3, y0 + len],
+        stroke: 'rgba(120,90,50,0.28)', strokeWidth: 2 + (i % 4) * 1.6, lineCap: 'round'
+      }));
+    }
+    // провал в полу — до воды, иначе он читается как чёрное пятно на поверхности
+    g.add(new (K().Path)({
+      data: 'M760 1240 C830 1214 940 1216 1000 1244 C1014 1300 976 1348 900 1364 C826 1348 772 1300 760 1240 Z',
+      fill: '#010706', stroke: '#0b2a26', strokeWidth: 4
+    }));
+    g.add(new (K().Path)({
+      data: 'M760 1240 C830 1214 940 1216 1000 1244',
+      stroke: 'rgba(150,255,225,0.35)', strokeWidth: 2.4, shadowColor: '#8affd6', shadowBlur: 18
+    }));
+    // вода по пояс: линия + поверхность
+    g.add(new (K().Path)({
+      data: 'M-200 1210 C160 1180 380 1236 620 1206 C860 1176 1080 1232 1400 1200 L1400 ' + (H + 200) + ' L-200 ' + (H + 200) + ' Z',
+      fillLinearGradientStartPoint: { x: 0, y: 1200 },
+      fillLinearGradientEndPoint: { x: 0, y: H },
+      fillLinearGradientColorStops: [0, 'rgba(70,190,165,0.36)', 0.4, 'rgba(28,110,96,0.55)', 1, 'rgba(6,38,34,0.9)']
+    }));
+    g.add(new (K().Path)({
+      data: 'M-200 1210 C160 1180 380 1236 620 1206 C860 1176 1080 1232 1400 1200',
+      stroke: 'rgba(190,255,235,0.55)', strokeWidth: 2.6
+    }));
+    // отражения на воде
+    for (let i = 0; i < 12; i++) {
+      const x = 60 + i * 96;
+      g.add(new (K().Line)({
+        points: [x, 1250 + (i % 4) * 70, x + 54, 1252 + (i % 4) * 70],
+        stroke: 'rgba(180,255,235,0.14)', strokeWidth: 2.4
+      }));
+    }
+    // биолюминесцентные пятна на стенах
+    for (let i = 0; i < 26; i++) {
+      const x = 60 + Math.abs(n.noise2D(i, 17)) * 1080;
+      const y = 380 + Math.abs(n.noise2D(i, 19)) * 780;
+      g.add(new (K().Circle)({
+        x: r(x), y: r(y), radius: 4 + Math.abs(n.noise2D(i, 23)) * 16,
+        fill: 'rgba(120,255,220,0.10)', stroke: 'rgba(150,255,230,0.3)', strokeWidth: 1.3
+      }));
+    }
+    return {};
+  };
+
+  /* --------------------------------------------------------- 23. капсула не с Земли */
+  Cine.setCapsuleBay = function (root, p) {
+    const g = new (K().Group)();
+    root.add(g);
+    const SimplexLib = Simplex();
+    const n = new SimplexLib(6606);
+    g.add(new (K().Path)({
+      data: 'M-200 -200 L' + (W + 200) + ' -200 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
+      fillLinearGradientStartPoint: { x: 0, y: 0 },
+      fillLinearGradientEndPoint: { x: 0, y: H },
+      fillLinearGradientColorStops: [0, '#050c12', 0.5, '#0a1a20', 1, '#03080b']
+    }));
+    // бетонная выемка в стене
+    g.add(new (K().Path)({
+      data: 'M120 260 L1080 240 L1100 1300 L100 1320 Z',
+      fill: '#0b1a1f', stroke: '#173039', strokeWidth: 4
+    }));
+    g.add(new (K().Path)({
+      data: 'M180 320 L1020 300 L1036 1240 L164 1258 Z',
+      fill: '#08141a'
+    }));
+    // капсула: сфера в срезе
+    const cx = 600, cy = 760, R = 300;
+    g.add(new (K().Circle)({
+      x: cx, y: cy, radius: R + 70,
+      fillRadialGradientStartPoint: { x: 0, y: 0 },
+      fillRadialGradientEndPoint: { x: 0, y: 0 },
+      fillRadialGradientRadius: R + 70,
+      fillRadialGradientColorStops: [0, 'rgba(140,255,220,0.16)', 1, 'rgba(140,255,220,0)']
+    }));
+    g.add(new (K().Path)({
+      data: 'M' + (cx - R) + ' ' + cy + ' A' + R + ' ' + R + ' 0 1 1 ' + (cx + R) + ' ' + cy + ' A' + R + ' ' + R + ' 0 1 1 ' + (cx - R) + ' ' + cy + ' Z',
+      fillLinearGradientStartPoint: { x: cx - R, y: cy - R },
+      fillLinearGradientEndPoint: { x: cx + R, y: cy + R },
+      fillLinearGradientColorStops: [0, '#1c3138', 0.45, '#12232a', 1, '#08151a'],
+      stroke: '#2b4a55', strokeWidth: 6
+    }));
+    // рёбра сферы
+    for (let i = 1; i <= 4; i++) {
+      g.add(new (K().Ellipse)({
+        x: cx, y: cy, radiusX: R * (1 - i * 0.18), radiusY: R,
+        stroke: 'rgba(120,200,210,0.18)', strokeWidth: 2
+      }));
+    }
+    // окалина — прожилки на корпусе
+    for (let i = 0; i < 22; i++) {
+      let x = cx - R + Math.abs(n.noise2D(i, 3)) * R * 2;
+      let y = cy - R + Math.abs(n.noise2D(i, 5)) * R * 2;
+      let d = 'M' + r(x) + ' ' + r(y);
+      for (let k = 0; k < 4; k++) {
+        x += n.noise2D(i * 2 + k, 7) * 40;
+        y += n.noise2D(i * 3 + k, 11) * 40;
+        d += ' L' + r(x) + ' ' + r(y);
+      }
+      g.add(new (K().Path)({ data: d, stroke: 'rgba(255,190,120,0.22)', strokeWidth: 1.6 }));
+    }
+    // свечение из щели
+    g.add(new (K().Path)({
+      data: 'M' + (cx - 120) + ' ' + (cy + 140) + ' C' + (cx - 40) + ' ' + (cy + 200) + ' ' + (cx + 60) + ' ' + (cy + 190) + ' ' + (cx + 130) + ' ' + (cy + 120),
+      stroke: 'rgba(160,255,230,0.75)', strokeWidth: 4, shadowColor: '#8affd6', shadowBlur: 40
+    }));
+    // пол
+    g.add(new (K().Path)({
+      data: 'M-200 1300 L' + (W + 200) + ' 1280 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + ' Z',
+      fillLinearGradientStartPoint: { x: 0, y: 1290 },
+      fillLinearGradientEndPoint: { x: 0, y: H },
+      fillLinearGradientColorStops: [0, '#0a171c', 1, '#03080a']
+    }));
+    // инструменты и обломки вокруг
+    for (let i = 0; i < 9; i++) {
+      const x = 160 + i * 110;
+      const y = 1380 + (i % 4) * 40;
+      g.add(new (K().Path)({
+        data: 'M' + x + ' ' + y + ' L' + (x + 46) + ' ' + (y - 12) + ' L' + (x + 52) + ' ' + (y + 4) + ' L' + (x + 6) + ' ' + (y + 16) + ' Z',
+        fill: '#132228', stroke: '#1f3d46', strokeWidth: 1.6
+      }));
+    }
+    return { capsule: { x: cx, y: cy, r: R } };
+  };
+
+  /* --------------------------------------------------------- 24. гидролокатор */
+  Cine.setSonarRoom = function (root, p) {
+    const g = new (K().Group)();
+    root.add(g);
+    g.add(new (K().Path)({
+      data: 'M-200 -200 L' + (W + 200) + ' -200 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
+      fill: '#03090c'
+    }));
+    // круглый экран
+    const cx = 600, cy = 700, R = 330;
+    g.add(new (K().Circle)({
+      x: cx, y: cy, radius: R + 26,
+      fill: '#0a1a1f', stroke: '#1d4149', strokeWidth: 8
+    }));
+    g.add(new (K().Circle)({
+      x: cx, y: cy, radius: R,
+      fillRadialGradientStartPoint: { x: 0, y: 0 },
+      fillRadialGradientEndPoint: { x: 0, y: 0 },
+      fillRadialGradientRadius: R,
+      fillRadialGradientColorStops: [0, '#0b2e2c', 0.7, '#061c1c', 1, '#03100f']
+    }));
+    // сетка
+    [0.33, 0.66, 1].forEach(function (k) {
+      g.add(new (K().Circle)({ x: cx, y: cy, radius: R * k, stroke: 'rgba(140,255,220,0.22)', strokeWidth: 2 }));
+    });
+    for (let i = 0; i < 12; i++) {
+      const a = i / 12 * Math.PI * 2;
+      g.add(new (K().Line)({
+        points: [cx + Math.cos(a) * 40, cy + Math.sin(a) * 40, cx + Math.cos(a) * R, cy + Math.sin(a) * R],
+        stroke: 'rgba(140,255,220,0.14)', strokeWidth: 1.6
+      }));
+    }
+    // сектор развёртки
+    g.add(new (K().Path)({
+      data: 'M' + cx + ' ' + cy + ' L' + (cx + R * 0.42) + ' ' + (cy - R * 0.9) + ' A' + R + ' ' + R + ' 0 0 1 ' + (cx + R * 0.9) + ' ' + (cy - R * 0.42) + ' Z',
+      fill: 'rgba(140,255,220,0.12)'
+    }));
+    // отметки контактов
+    for (let i = 0; i < 5; i++) {
+      const a = -2.4 + i * 0.5, rr = 90 + i * 44;
+      g.add(new (K().Circle)({
+        x: cx + Math.cos(a) * rr, y: cy + Math.sin(a) * rr, radius: 5 + (i === 4 ? 9 : 0),
+        fill: i === 4 ? '#ff7a5c' : '#bfffe8', opacity: 0.85,
+        shadowColor: i === 4 ? '#ff7a5c' : '#8affd6', shadowBlur: 18
+      }));
+    }
+    // корпус прибора
+    g.add(new (K().Path)({
+      data: 'M120 1080 L1080 1060 L1110 1420 L90 1440 Z',
+      fill: '#0c1d22', stroke: '#1d4149', strokeWidth: 4
+    }));
+    for (let i = 0; i < 14; i++) {
+      const x = 150 + i * 68;
+      g.add(new (K().Circle)({
+        x: x, y: 1170 + (i % 3) * 60, radius: 12,
+        fill: i % 4 === 0 ? '#ff9a5c' : '#2f6a72', opacity: 0.7
+      }));
+    }
+    // тумблеры
+    for (let i = 0; i < 6; i++) {
+      g.add(new (K().Line)({
+        points: [180 + i * 150, 1330, 180 + i * 150 + (i % 2 ? 22 : -22), 1290],
+        stroke: '#8fe8f0', strokeWidth: 6, lineCap: 'round', opacity: 0.6
+      }));
+    }
+    // тросы под потолком
+    for (let i = 0; i < 7; i++) {
+      g.add(new (K().Path)({
+        data: 'M' + (60 + i * 180) + ' -40 C' + (80 + i * 180) + ' 120 ' + (30 + i * 180) + ' 280 ' + (70 + i * 180) + ' 420',
+        stroke: '#132c33', strokeWidth: 5, opacity: 0.8
+      }));
+    }
+    return { screen: { x: cx, y: cy, r: R } };
+  };
+
+  /* --------------------------------------------------------- 25. иллюминатор */
+  Cine.setPorthole = function (root, p) {
+    const g = new (K().Group)();
+    root.add(g);
+    const SimplexLib = Simplex();
+    const n = new SimplexLib(3355);
+    // стена вокруг
+    g.add(new (K().Path)({
+      data: 'M-200 -200 L' + (W + 200) + ' -200 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
+      fillLinearGradientStartPoint: { x: 0, y: 0 },
+      fillLinearGradientEndPoint: { x: 0, y: H },
+      fillLinearGradientColorStops: [0, '#0a161b', 1, '#040a0d']
+    }));
+    const cx = 600, cy = 820, R = 400;
+    // вода за стеклом
+    g.add(new (K().Circle)({
+      x: cx, y: cy, radius: R,
+      fillLinearGradientStartPoint: { x: 0, y: cy - R },
+      fillLinearGradientEndPoint: { x: 0, y: cy + R },
+      fillLinearGradientColorStops: [0, '#07242c', 0.5, '#031218', 1, '#010a0c']
+    }));
+    // столбы света сверху
+    for (let i = 0; i < 5; i++) {
+      const x = cx - 220 + i * 110;
+      g.add(new (K().Path)({
+        data: 'M' + x + ' ' + (cy - R) + ' L' + (x + 60) + ' ' + (cy - R) + ' L' + (x + 150) + ' ' + (cy + R * 0.6) + ' L' + (x - 40) + ' ' + (cy + R * 0.6) + ' Z',
+        fillLinearGradientStartPoint: { x: 0, y: cy - R },
+        fillLinearGradientEndPoint: { x: 0, y: cy + R * 0.6 },
+        fillLinearGradientColorStops: [0, 'rgba(120,220,255,0.10)', 1, 'rgba(120,220,255,0)']
+      }));
+    }
+    // пузырьки / взвесь
+    for (let i = 0; i < 40; i++) {
+      const a = Math.abs(n.noise2D(i, 3)) * Math.PI * 2;
+      const rr = Math.abs(n.noise2D(i, 7)) * R * 0.94;
+      g.add(new (K().Circle)({
+        x: r(cx + Math.cos(a) * rr), y: r(cy + Math.sin(a) * rr),
+        radius: 1.4 + Math.abs(n.noise2D(i, 11)) * 3.4,
+        fill: 'rgba(200,255,245,0.35)'
+      }));
+    }
+    // толстое стекло: внутренний обод и фаска
+    g.add(new (K().Circle)({ x: cx, y: cy, radius: R, fillEnabled: false, stroke: '#33565f', strokeWidth: 26 }));
+    g.add(new (K().Circle)({ x: cx, y: cy, radius: R - 16, fillEnabled: false, stroke: '#0a1a20', strokeWidth: 10, opacity: 0.8 }));
+    g.add(new (K().Circle)({
+      x: cx, y: cy, radius: R - 22, fillEnabled: false,
+      stroke: 'rgba(180,255,245,0.18)', strokeWidth: 4
+    }));
+    // блик стекла
+    g.add(new (K().Path)({
+      data: 'M' + (cx - 300) + ' ' + (cy - 180) + ' C' + (cx - 180) + ' ' + (cy - 330) + ' ' + (cx + 40) + ' ' + (cy - 370) + ' ' + (cx + 200) + ' ' + (cy - 300),
+      stroke: 'rgba(210,255,250,0.16)', strokeWidth: 26, lineCap: 'round'
+    }));
+    // зажимы по кругу
+    for (let i = 0; i < 12; i++) {
+      const a = i / 12 * Math.PI * 2;
+      g.add(new (K().Circle)({
+        x: cx + Math.cos(a) * (R + 22), y: cy + Math.sin(a) * (R + 22), radius: 13,
+        fill: '#16333b', stroke: '#2b525b', strokeWidth: 3
+      }));
+    }
+    // рама-уголки
+    g.add(new (K().Path)({
+      data: 'M60 120 L340 120 L340 180 L120 180 L120 400 L60 400 Z',
+      fill: '#0e2027', stroke: '#1b3a43', strokeWidth: 2
+    }));
+    g.add(new (K().Path)({
+      data: 'M1140 1680 L860 1680 L860 1620 L1080 1620 L1080 1400 L1140 1400 Z',
+      fill: '#0e2027', stroke: '#1b3a43', strokeWidth: 2
+    }));
+    return { port: { x: cx, y: cy, r: R } };
+  };
+
+  /* --------------------------------------------------------- 26. шахта с трапом */
+  Cine.setShaft = function (root, p) {
+    const g = new (K().Group)();
+    root.add(g);
+    const SimplexLib = Simplex();
+    const n = new SimplexLib(9091);
+    g.add(new (K().Path)({
+      data: 'M-200 -200 L' + (W + 200) + ' -200 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
+      fill: '#040c0f'
+    }));
+    // стены шахты сужаются
+    g.add(new (K().Path)({
+      data: 'M-100 0 L520 240 L520 1560 L-100 1800 Z',
+      fillLinearGradientStartPoint: { x: 0, y: 0 },
+      fillLinearGradientEndPoint: { x: 520, y: 900 },
+      fillLinearGradientColorStops: [0, '#0b1a1f', 1, '#061114']
+    }));
+    g.add(new (K().Path)({
+      data: 'M1300 0 L680 240 L680 1560 L1300 1800 Z',
+      fillLinearGradientStartPoint: { x: 1300, y: 0 },
+      fillLinearGradientEndPoint: { x: 680, y: 900 },
+      fillLinearGradientColorStops: [0, '#0c1d22', 1, '#061114']
+    }));
+    const midX = 600;
+    // рёбра шахты — за трапом, иначе трап читается как пружина
+    for (let i = 0; i < 7; i++) {
+      const k = Math.pow(i / 7, 1.25);
+      const half = 540 - k * 300;
+      g.add(new (K().Ellipse)({
+        x: midX, y: 220 + k * 1360, radiusX: half, radiusY: half * 0.2,
+        stroke: i % 2 ? 'rgba(15,38,44,0.75)' : 'rgba(22,56,63,0.6)', strokeWidth: 7 - i * 0.6
+      }));
+    }
+    // трап: две стойки и перекладины в перспективе
+    for (let sgn = -1; sgn <= 1; sgn += 2) {
+      g.add(new (K().Line)({
+        points: [midX + sgn * 86, 120, midX + sgn * 120, 1720],
+        stroke: '#25454e', strokeWidth: 16, lineCap: 'round'
+      }));
+      g.add(new (K().Line)({
+        points: [midX + sgn * 86, 120, midX + sgn * 120, 1720],
+        stroke: 'rgba(160,240,255,0.14)', strokeWidth: 3, lineCap: 'round'
+      }));
+    }
+    for (let i = 0; i < 16; i++) {
+      const t = i / 15;
+      const y = 180 + t * 1500;
+      const half = 86 + t * 34;
+      const w = 10 + t * 5;
+      g.add(new (K().Line)({
+        points: [midX - half, y, midX + half, y - 4],
+        stroke: i % 4 === 0 ? '#2f5862' : '#1c3941', strokeWidth: w, lineCap: 'round'
+      }));
+    }
+    // вода по стенкам
+    for (let i = 0; i < 18; i++) {
+      const x = 120 + Math.abs(n.noise2D(i, 5)) * 240;
+      const y = 300 + Math.abs(n.noise2D(i, 9)) * 1300;
+      g.add(new (K().Line)({
+        points: [x, y, x + 6, y + 60 + Math.abs(n.noise2D(i, 13)) * 140],
+        stroke: 'rgba(120,220,220,0.18)', strokeWidth: 2.4, lineCap: 'round'
+      }));
+    }
+    // площадка-решётка, на которой стоят люди
+    g.add(new (K().Path)({
+      data: 'M-200 1590 L' + (W + 200) + ' 1590 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + ' Z',
+      fillLinearGradientStartPoint: { x: 0, y: 1590 },
+      fillLinearGradientEndPoint: { x: 0, y: H },
+      fillLinearGradientColorStops: [0, '#12242a', 1, '#050c0f']
+    }));
+    for (let i = 0; i < 14; i++) {
+      g.add(new (K().Line)({
+        points: [-60 + i * 100, 1594, -60 + i * 100, 1720],
+        stroke: '#1b333a', strokeWidth: 5, opacity: 0.9
+      }));
+    }
+    for (let i = 0; i < 3; i++) {
+      g.add(new (K().Line)({
+        points: [-100, 1600 + i * 46, (W + 100), 1600 + i * 46],
+        stroke: '#1b333a', strokeWidth: 4, opacity: 0.8
+      }));
+    }
+    // перила площадки
+    g.add(new (K().Line)({ points: [-40, 1470, 300, 1470], stroke: '#2a4a53', strokeWidth: 8, lineCap: 'round' }));
+    g.add(new (K().Line)({ points: [900, 1470, 1240, 1470], stroke: '#2a4a53', strokeWidth: 8, lineCap: 'round' }));
+    g.add(new (K().Line)({ points: [120, 1470, 120, 1600], stroke: '#2a4a53', strokeWidth: 7 }));
+    g.add(new (K().Line)({ points: [1080, 1470, 1080, 1600], stroke: '#2a4a53', strokeWidth: 7 }));
+
+    // далёкий свет внизу
+    g.add(new (K().Ellipse)({
+      x: midX, y: 1620, radiusX: 260, radiusY: 90,
+      fillRadialGradientStartPoint: { x: 0, y: 0 },
+      fillRadialGradientEndPoint: { x: 0, y: 0 },
+      fillRadialGradientRadius: 260,
+      fillRadialGradientColorStops: [0, 'rgba(255,150,90,0.16)', 1, 'rgba(255,150,90,0)']
     }));
     return {};
   };

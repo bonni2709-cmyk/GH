@@ -293,7 +293,7 @@
     }));
     chair.add(new (K().Path)({
       data: 'M520 1470 L688 1462 L692 1570 L516 1560 Z',
-      fill: 'none', stroke: '#0d1a1f', strokeWidth: 3
+      fillEnabled: false, stroke: '#0d1a1f', strokeWidth: 3
     }));
     s.root.add(chair);
     chair.moveToBottom();

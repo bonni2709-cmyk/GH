@@ -111,7 +111,9 @@
       .concat(Cine.VOL1 || [])
       .concat(Cine.VOL2 || [])
       .concat(Cine.VOL3 || [])
-      .concat(Cine.VOL4 || []);
+      .concat(Cine.VOL4 || [])
+      .concat(Cine.VOL5 || [])
+      .concat(Cine.VOL6 || []);
     return all.length ? all : [Cine.buildChapter1Page5];
   };
 
