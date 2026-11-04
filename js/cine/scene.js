@@ -81,6 +81,7 @@
         emotion: f.emotion || 'neutral',
         rifle: !!f.rifle,
         aimAngle: f.aimAngle,
+        mutant: f.mutant || null,
         palette: f.palette || { cloth: '#1b2b32', cloth2: '#121b20', accent: p.accent }
       });
       if (f.rotation) fig.group.rotation(f.rotation);

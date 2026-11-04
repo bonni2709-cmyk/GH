@@ -110,7 +110,10 @@
     woman: { base: '#d2ae96', shade: '#a9856d', light: '#eed0b6' },
     wei: { base: '#d8b79c', shade: '#ab8569', light: '#f0d3b8' },
     tech: { base: '#8f7a68', shade: '#6a5748', light: '#ab9380' },
-    kraken: { base: '#b08a72', shade: '#856251', light: '#cfa78c' }
+    kraken: { base: '#b08a72', shade: '#856251', light: '#cfa78c' },
+    // Том 3+: обращённые — пепельная кожа, зеленоватый подтон
+    turned: { base: '#8d9a92', shade: '#5e6d66', light: '#b6c4bb' },
+    turnedDeep: { base: '#6f7f78', shade: '#45524c', light: '#9caea4' }
   };
 
   /* --------------------------------------------------------------- пропорции */
@@ -302,6 +305,197 @@
     return g;
   }
 
+
+  /* ------------------------------------------------------- мутационные признаки */
+  /**
+   * mutant: {
+   *   veins: 0..1      — светящиеся жилы под кожей (предплечья, шея, скулы)
+   *   tendrils: 0..4   — щупальца из-за спины/из-за плеч
+   *   claw: 0..1       — пальцы удлиняются и заостряются
+   *   glow: '#8affd6'  — цвет свечения
+   *   eyeGlow: 0..1    — свечение зрачков
+   * }
+   */
+  function drawMutant(layer, s, mut, skin, ink, part) {
+    if (!mut) return;
+    const glow = mut.glow || '#8affd6';
+    const which = part || 'all';
+    const want = function (name) { return which === 'all' || which === name; };
+
+    /* ---------- жилы: ветвящиеся линии под кожей ---------- */
+    if (want('body') || want('head')) {
+      const v = mut.veins || 0;
+      if (v > 0) {
+        const zig = function (A, B, n, amp, seed) {
+          const dx = B.x - A.x, dy = B.y - A.y;
+          const L = Math.hypot(dx, dy) || 1;
+          const px = -dy / L, py = dx / L;
+          const pts = [A];
+          for (let i = 1; i < n; i++) {
+            const t = i / n;
+            const w = Math.sin((t * 6.4 + seed) * Math.PI) * amp;
+            pts.push({ x: A.x + dx * t + px * w, y: A.y + dy * t + py * w });
+          }
+          pts.push(B);
+          return pts;
+        };
+        const vein = function (pts, width, op) {
+          const flat = [];
+          pts.forEach(function (q) { flat.push(r(q.x), r(q.y)); });
+          layer.add(new (K().Line)({
+            points: flat, stroke: glow, strokeWidth: width, opacity: op,
+            lineCap: 'round', lineJoin: 'round', tension: 0.42,
+            shadowColor: glow, shadowBlur: 9 + v * 10
+          }));
+          layer.add(new (K().Line)({
+            points: flat, stroke: '#eafff8', strokeWidth: Math.max(0.6, width * 0.3), opacity: op * 0.7,
+            lineCap: 'round', lineJoin: 'round', tension: 0.42
+          }));
+        };
+
+        if (want('body')) {
+          [[s.eL, s.handL, 1], [s.eR, s.handR, -1]].forEach(function (arm, idx) {
+            const A = arm[0], B = arm[1], sgn = arm[2];
+            const dx = B.x - A.x, dy = B.y - A.y;
+            const L = Math.hypot(dx, dy) || 1;
+            const ux = dx / L, uy = dy / L, px = -uy, py = ux;
+            for (let i = 0; i < 3; i++) {
+              const off = (i - 1) * 4.6 + sgn * 1.2;
+              const t0 = 0.1 + i * 0.05, t1 = 0.9 - i * 0.06;
+              const a2 = { x: A.x + ux * L * t0 + px * off, y: A.y + uy * L * t0 + py * off };
+              const b2 = { x: A.x + ux * L * t1 + px * off * 1.6, y: A.y + uy * L * t1 + py * off * 1.6 };
+              vein(zig(a2, b2, 4, 2.4 + v * 1.6, i + idx * 2), 1.3 + v * 1.1, 0.3 + v * 0.45);
+            }
+            // отростки у локтя и у кисти
+            [[0.12, 1], [0.8, -1]].forEach(function (sp, k) {
+              const bx = A.x + ux * L * sp[0], by = A.y + uy * L * sp[0];
+              const dir = sp[1] * (k ? -1 : 1);
+              vein(zig({ x: bx, y: by }, { x: bx + px * 10 * dir + ux * 8, y: by + py * 10 * dir + uy * 8 }, 3, 1.8, k + idx), 1 + v * 0.9, 0.26 + v * 0.3);
+            });
+          });
+        }
+
+        if (want('head')) {
+          if (v > 0.25) {
+            [-1, 1].forEach(function (sgn) {
+              const a2 = { x: s.neckBase.x + sgn * 9, y: s.neckBase.y + 10 };
+              const b2 = { x: s.head.x + sgn * 20, y: s.head.y + 40 };
+              vein(zig(a2, b2, 3, 1.6, sgn + 1), 1.2 + v * 0.8, 0.18 + v * 0.26);
+            });
+          }
+          if (v > 0.55) {
+            vein(zig({ x: s.head.x - 30, y: s.head.y + 2 }, { x: s.head.x - 8, y: s.head.y - 26 }, 3, 1.4, 3), 1, 0.3 * v);
+          }
+        }
+      }
+    }
+
+    /* ---------- щупальца: из-за плеч, дугой наружу, с крючком на конце ---------- */
+    if (want('back')) {
+      const tn = Math.round(mut.tendrils || 0);
+      for (let i = 0; i < tn; i++) {
+        const side = i % 2 ? 1 : -1;
+        const row = Math.floor(i / 2);
+        const base = {
+          x: s.chest.x + side * (BONE.shoulder - 10),
+          y: s.chest.y + 22 + row * 12
+        };
+        const len = 176 + (i % 3) * 18 - row * 22;
+        const N = 12;
+        const ds = len / N;
+        // угол стартует вертикально и загибается наружу — к концу почти горизонтально
+        const bend = 0.78 + (i % 2) * 0.14;
+        const pts = [base];
+        let px = base.x, py = base.y;
+        let acc = 0;
+        for (let k = 1; k <= N; k++) {
+          const t = k / N;
+          const ang = -Math.PI / 2 + side * bend * Math.pow(t, 1.55);
+          acc += ds;
+          px += Math.cos(ang) * ds;
+          py += Math.sin(ang) * ds;
+          pts.push({ x: px, y: py });
+        }
+        // лента-полигон: ширина падает к кончику
+        const r0 = 13.2 - i * 1.1;
+        const left = [], right = [];
+        for (let k = 0; k <= N; k++) {
+          const a = pts[Math.max(0, k - 1)], b = pts[Math.min(N, k + 1)];
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const L = Math.hypot(dx, dy) || 1;
+          const nx = -dy / L, ny = dx / L;
+          const w = Math.max(1.1, r0 * (1 - Math.pow(k / N, 1.45) * 0.93));
+          left.push({ x: pts[k].x + nx * w * 0.5, y: pts[k].y + ny * w * 0.5 });
+          right.push({ x: pts[k].x - nx * w * 0.5, y: pts[k].y - ny * w * 0.5 });
+        }
+        const flatL = [], flatR = [];
+        left.forEach(function (q) { flatL.push(q.x, q.y); });
+        right.reverse().forEach(function (q) { flatR.push(q.x, q.y); });
+        layer.add(new (K().Line)({
+          points: flatL.concat(flatR), closed: true, tension: 0.42,
+          fill: skin.base, stroke: ink, strokeWidth: 2.6, lineJoin: 'round'
+        }));
+        // затенение вдоль внутренней стороны
+        layer.add(new (K().Line)({
+          points: flatL, tension: 0.42, stroke: skin.shade, strokeWidth: r0 * 0.28,
+          opacity: 0.55, lineCap: 'round', offsetX: side * 2, offsetY: 1
+        }));
+        // блик
+        layer.add(new (K().Line)({
+          points: flatR, tension: 0.42, stroke: skin.light, strokeWidth: r0 * 0.2,
+          opacity: 0.4, lineCap: 'round', offsetX: -side * 1.5
+        }));
+        // жила свечения внутри ленты
+        const flatC = [];
+        pts.forEach(function (q) { flatC.push(r(q.x), r(q.y)); });
+        layer.add(new (K().Line)({
+          points: flatC, stroke: glow, strokeWidth: 1.7, opacity: 0.34,
+          lineCap: 'round', lineJoin: 'round', tension: 0.42,
+          shadowColor: glow, shadowBlur: 14
+        }));
+        // узелки
+        [4, 8].forEach(function (k) {
+          layer.add(new (K().Circle)({
+            x: r(pts[k].x), y: r(pts[k].y), radius: 1.6, fill: glow, opacity: 0.34,
+            shadowColor: glow, shadowBlur: 6
+          }));
+        });
+        // кончик-крючок
+        const tip = pts[N];
+        layer.add(new (K().Circle)({
+          x: r(tip.x), y: r(tip.y), radius: 3.4, fill: '#eafff8', opacity: 0.86,
+          shadowColor: glow, shadowBlur: 16
+        }));
+      }
+    }
+
+    /* ---------- когти ---------- */
+    if (want('body')) {
+      const cl = mut.claw || 0;
+      if (cl > 0) {
+        [[s.eL, s.handL], [s.eR, s.handR]].forEach(function (arm) {
+          const A = arm[0], B = arm[1];
+          const dx = B.x - A.x, dy = B.y - A.y;
+          const L = Math.hypot(dx, dy) || 1;
+          const ux = dx / L, uy = dy / L, px = -uy, py = ux;
+          for (let i = -1; i <= 1; i++) {
+            const off = i * 7.5;
+            const bx = B.x + px * off - ux * 2, by = B.y + py * off - uy * 2;
+            const lenk = 14 + cl * 26 - Math.abs(i) * 3;
+            const tx = bx + ux * lenk + px * i * 4, ty = by + uy * lenk + py * i * 4 + cl * 4;
+            const data = 'M' + r(bx + px * 3.2) + ' ' + r(by + py * 3.2) +
+              ' Q' + r(bx + ux * lenk * 0.5 + px * (off > 0 ? 4 : -1)) + ' ' + r(by + uy * lenk * 0.5 + py * 3) +
+              ' ' + r(tx) + ' ' + r(ty) +
+              ' Q' + r(bx + ux * lenk * 0.45 - px * 3) + ' ' + r(by + uy * lenk * 0.45 - py * 2) +
+              ' ' + r(bx - px * 3.2) + ' ' + r(by - py * 3.2) + ' Z';
+            layer.add(new (K().Path)({ data: data, fill: '#c9d4cd', stroke: ink, strokeWidth: 1.5, opacity: 0.95 }));
+            layer.add(new (K().Path)({ data: data, stroke: glow, strokeWidth: 0.6, opacity: 0.3, shadowColor: glow, shadowBlur: 7 }));
+          }
+        });
+      }
+    }
+  }
+
   /* --------------------------------------------------------------- фигура */
   /**
    * buildFigure({x,y,scale,flip,variant,pose,emotion,rifle,palette})
@@ -334,7 +528,8 @@
     const layerTorso = new (K().Group)();
     const layerHead = new (K().Group)();
     const layerLimbs = new (K().Group)();
-    root.add(layerLimbs, layerTorso, layerHead);
+    const layerBack = new (K().Group)();   // щупальца и то, что за спиной
+    root.add(layerBack, layerLimbs, layerTorso, layerHead);
 
     const nodes = {};
 
@@ -344,8 +539,12 @@
       layerTorso.destroyChildren();
       layerHead.destroyChildren();
       layerLimbs.destroyChildren();
+      layerBack.destroyChildren();
 
       const s = skeleton(st);
+
+      /* --- то, что за спиной: щупальца --- */
+      if (o.mutant) drawMutant(layerBack, s, o.mutant, skin, ink, 'back');
 
       /* --- задняя рука и ноги (за корпусом) --- */
       layerLimbs.add(make({
@@ -425,6 +624,9 @@
       layerTorso.add(make({ data: limb(s.eL, s.handL, 14, 9, 0.04), fill: cloth, stroke: ink, strokeWidth: 3 }));
       layerTorso.add(handPath(s.eL, s.handL, 1.15, skin, ink));
 
+      /* --- мутационные признаки (Том 3+) --- */
+      if (o.mutant) drawMutant(layerTorso, s, o.mutant, skin, ink, 'body');
+
       /* --- передняя нога --- */
       layerTorso.add(make({ data: limb(s.hipL, s.kL, 27, 19, -0.04), fill: cloth, stroke: ink, strokeWidth: 3.2 }));
       layerTorso.add(make({ data: limb(s.kL, s.footL, 19, 13, -0.02), fill: cloth2, stroke: ink, strokeWidth: 3 }));
@@ -459,6 +661,7 @@
         skull.push({ x: s.head.x + Math.cos(a) * rad * 0.92, y: s.head.y + Math.sin(a) * rad });
       }
       layerHead.add(make({ data: smooth(skull, true, 0.9), fill: skin.base, stroke: '#2a1a16', strokeWidth: 2.6 }));
+      if (o.mutant) drawMutant(layerHead, s, o.mutant, skin, ink, 'head');
       // тень на скуле
       layerHead.add(make({
         data: 'M' + r(s.head.x - R * 0.5) + ' ' + r(s.head.y - R * 0.1) + 'C' + r(s.head.x - R * 0.2) + ' ' + r(s.head.y + R * 0.6) + ' ' + r(s.head.x + R * 0.4) + ' ' + r(s.head.y + R * 0.5) + ' ' + r(s.head.x + R * 0.6) + ' ' + r(s.head.y + R * 0.1),
@@ -562,6 +765,42 @@
       }
 
       layerHead.add(buildFace(s, faceParams(o.emotion || 'neutral', o.faceBlend), skin));
+      if (o.mutant && o.mutant.eyeGlow) {
+        const eg = o.mutant.eyeGlow;
+        const eyeLayer = new (K().Group)();
+        const R2 = BONE.headR;
+        const fc = faceParams(o.emotion || 'neutral', o.faceBlend);
+        const ex0 = s.head.x + R2 * 0.18;
+        const ey0 = s.head.y - 2 + (-R2 * 0.06 + fc.browY * 0.35);
+        [-1, 1].forEach(function (sgn) {
+          const ex = ex0 + sgn * R2 * 0.36;
+          // мягкое свечение вокруг глаза
+          eyeLayer.add(new (K().Circle)({
+            x: ex, y: ey0, radius: 17 + eg * 10,
+            fillRadialGradientStartPoint: { x: 0, y: 0 },
+            fillRadialGradientEndPoint: { x: 0, y: 0 },
+            fillRadialGradientRadius: 17 + eg * 10,
+            fillRadialGradientColorStops: [
+              0, 'rgba(200,255,240,' + (0.3 * eg).toFixed(2) + ')',
+              1, 'rgba(200,255,240,0)'
+            ]
+          }));
+          // цветное ядро поверх зрачка
+          eyeLayer.add(new (K().Circle)({
+            x: ex + 1.6, y: ey0, radius: 3.2 + eg * 2.4,
+            fill: o.mutant.glow || '#8affd6', opacity: 0.7 + eg * 0.25,
+            shadowColor: o.mutant.glow || '#8affd6', shadowBlur: 22 + eg * 22
+          }));
+          // белая искра в центре
+          eyeLayer.add(new (K().Circle)({
+            x: ex + 1.6, y: ey0, radius: 1.2 + eg * 1.4,
+            fill: '#ffffff', opacity: 0.95
+          }));
+        });
+        eyeLayer.opacity(0.45 + eg * 0.55);
+        layerHead.add(eyeLayer);
+        nodes.eyeGlow = eyeLayer;
+      }
 
       /* --- оружие --- */
       if (o.rifle) {
@@ -669,8 +908,21 @@
         return api;
       },
       emotion: function (e) { o.emotion = e; draw(); return api; },
+      /** мутация: {veins, tendrils, claw, glow, eyeGlow} либо null */
+      mutant: function (m) { o.mutant = m; draw(); return api; },
+      /** навести ствол на точку в координатах родителя (как рисуется страница) */
       aimAt: function (x, y) {
-        const ang = Math.atan2(y - st.y - 330, x - st.x);
+        let tx = x, ty = y;
+        const par = root.getParent();
+        if (par) {
+          const abs = par.getAbsoluteTransform().point({ x: x, y: y });
+          const loc = root.getAbsoluteTransform().copy().invert().point(abs);
+          tx = loc.x; ty = loc.y;
+        }
+        // плечо в локальных координатах фигуры — примерно (0, -330)
+        // плечо в локальных координатах фигуры — примерно (st.x, st.y - 330)
+        let ang = Math.atan2(ty - (st.y - 330), tx - st.x);
+        ang = Math.max(-1.0, Math.min(0.55, ang));
         st.handL = { x: Math.cos(ang) * 190, y: -300 + Math.sin(ang) * 190 };
         st.lean = 0.1 + Math.sin(ang) * 0.06;
         st.headTilt = ang * 0.25;
@@ -701,6 +953,8 @@
       bbox: function () { return root.getClientRect({ relativeTo: root.getParent() }); }
     };
 
+    if (o.mutant) o.mutant = o.mutant;
+
     // стартовая поза
     if (o.pose) {
       const v = (POSES[o.pose] || POSES.stand)(o.poseArg);
@@ -711,7 +965,7 @@
   }
 
   Cine.buildFigure = buildFigure;
-  Cine.rig = { smooth: smooth, limb: limb, polar: polar, ik: ik, FACE: FACE, BONE: BONE, SKIN: SKIN };
+  Cine.rig = { smooth: smooth, limb: limb, polar: polar, ik: ik, FACE: FACE, BONE: BONE, SKIN: SKIN, mutant: drawMutant };
   Cine.pathCount = function (node) {
     let n = 0;
     node.find('Path').forEach(function () { n++; });

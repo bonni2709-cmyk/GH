@@ -1137,4 +1137,260 @@
     return { hole: { x: cx, y: cy }, glow: d };
   };
 
+
+  /* --------------------------------------------------------- 17. коридор после вспышки */
+  Cine.setFlash = function (root, p) {
+    const g = new (K().Group)();
+    root.add(g);
+    g.add(new (K().Path)({
+      data: 'M-200 -200 L' + (W + 200) + ' -200 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
+      fillLinearGradientStartPoint: { x: 0, y: 0 },
+      fillLinearGradientEndPoint: { x: 0, y: H },
+      fillLinearGradientColorStops: [0, '#1a0c06', 0.35, '#2a1208', 0.7, '#120806', 1, '#050302']
+    }));
+    // дым под потолком
+    const SimplexLib = Simplex();
+    const n = new SimplexLib(3131);
+    for (let i = 0; i < 12; i++) {
+      const cx = 100 + i * 100 + n.noise2D(i, 1) * 60;
+      g.add(new (K().Ellipse)({
+        x: cx, y: 260 + Math.abs(n.noise2D(i, 5)) * 180,
+        radiusX: 130 + Math.abs(n.noise2D(i, 3)) * 90, radiusY: 60 + Math.abs(n.noise2D(i, 7)) * 50,
+        fillRadialGradientStartPoint: { x: 0, y: 0 },
+        fillRadialGradientEndPoint: { x: 0, y: 0 },
+        fillRadialGradientRadius: 150,
+        fillRadialGradientColorStops: [0, 'rgba(60,40,30,0.30)', 1, 'rgba(60,40,30,0)']
+      }));
+    }
+    // переборка со снятой створкой, за ней свет
+    g.add(new (K().Path)({
+      data: 'M120 260 L360 240 L360 1240 L120 1260 Z',
+      fill: '#0a0d10', stroke: '#2a1a10', strokeWidth: 4
+    }));
+    g.add(new (K().Path)({
+      data: 'M380 220 C450 240 470 340 470 500 L470 1100 C470 1180 430 1230 380 1240 Z',
+      fill: 'rgba(255,190,120,0.20)', stroke: 'rgba(255,180,110,0.55)', strokeWidth: 3,
+      shadowColor: '#ff9a5c', shadowBlur: 60
+    }));
+    // оранжевый свет оттуда
+    g.add(new (K().Path)({
+      data: 'M420 300 L820 560 L820 1240 L420 1200 Z',
+      fillLinearGradientStartPoint: { x: 420, y: 300 },
+      fillLinearGradientEndPoint: { x: 800, y: 1240 },
+      fillLinearGradientColorStops: [0, 'rgba(255,150,80,0.20)', 1, 'rgba(255,150,80,0)']
+    }));
+    // обломки на полу
+    for (let i = 0; i < 22; i++) {
+      const bx = 140 + ((i * 197) % 900);
+      const by = 1420 + ((i * 89) % 260);
+      const rr = 7 + (i % 5) * 4;
+      g.add(new (K().Path)({
+        data: 'M' + bx + ' ' + by + ' L' + (bx + rr) + ' ' + (by - rr * 0.7) + ' L' + (bx + rr * 1.6) + ' ' + (by + rr * 0.3) + ' L' + (bx + rr * 0.4) + ' ' + (by + rr * 0.8) + ' Z',
+        fill: '#2b2420', stroke: '#6a5650', strokeWidth: 1.2
+      }));
+    }
+    // пол
+    g.add(new (K().Path)({
+      data: 'M-200 1240 L' + (W + 200) + ' 1240 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
+      fillLinearGradientStartPoint: { x: 0, y: 1240 },
+      fillLinearGradientEndPoint: { x: 0, y: H },
+      fillLinearGradientColorStops: [0, '#1d1512', 1, '#070504']
+    }));
+    return {};
+  };
+
+  /* --------------------------------------------------------- 18. горящее крыло */
+  Cine.setBurningWing = function (root, p) {
+    const g = new (K().Group)();
+    root.add(g);
+    g.add(new (K().Path)({
+      data: 'M-200 -200 L' + (W + 200) + ' -200 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
+      fillLinearGradientStartPoint: { x: 0, y: 0 },
+      fillLinearGradientEndPoint: { x: 0, y: H },
+      fillLinearGradientColorStops: [0, '#1c0703', 0.4, '#2e0d04', 0.75, '#160604', 1, '#050202']
+    }));
+    // огонь: пучок языков из simplex
+    const SimplexLib = Simplex();
+    const n = new SimplexLib(7777);
+    for (let i = 0; i < 26; i++) {
+      const bx = 80 + i * 44 + n.noise2D(i, 1) * 30;
+      const by = 1300 + Math.abs(n.noise2D(i, 3)) * 120;
+      const h = 220 + Math.abs(n.noise2D(i, 5)) * 420;
+      g.add(new (K().Path)({
+        data: 'M' + (bx - 34) + ' ' + by + ' C' + (bx - 20 + n.noise2D(i, 9) * 40) + ' ' + (by - h * 0.4) +
+          ' ' + (bx + 18 + n.noise2D(i, 11) * 40) + ' ' + (by - h * 0.7) +
+          ' ' + (bx + n.noise2D(i, 13) * 26) + ' ' + (by - h),
+        stroke: i % 3 ? 'rgba(255,120,40,0.55)' : 'rgba(255,200,90,0.6)',
+        strokeWidth: 18 + (i % 4) * 8, lineCap: 'round'
+      }));
+    }
+    // дым
+    for (let i = 0; i < 9; i++) {
+      const cx = 120 + i * 130;
+      g.add(new (K().Ellipse)({
+        x: cx, y: 520 + Math.abs(n.noise2D(i, 21)) * 300,
+        radiusX: 150, radiusY: 110,
+        fillRadialGradientStartPoint: { x: 0, y: 0 },
+        fillRadialGradientEndPoint: { x: 0, y: 0 },
+        fillRadialGradientRadius: 150,
+        fillRadialGradientColorStops: [0, 'rgba(20,14,12,0.55)', 1, 'rgba(20,14,12,0)']
+      }));
+    }
+    // раскалённый пол
+    g.add(new (K().Path)({
+      data: 'M-200 1320 L' + (W + 200) + ' 1320 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
+      fillLinearGradientStartPoint: { x: 0, y: 1320 },
+      fillLinearGradientEndPoint: { x: 0, y: 1700 },
+      fillLinearGradientColorStops: [0, 'rgba(255,110,40,0.30)', 1, 'rgba(80,20,6,0.6)']
+    }));
+    return {};
+  };
+
+  /* --------------------------------------------------------- 19. медотсек */
+  Cine.setMedbay = function (root, p) {
+    const g = new (K().Group)();
+    root.add(g);
+    g.add(new (K().Path)({
+      data: 'M-200 -200 L' + (W + 200) + ' -200 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
+      fillLinearGradientStartPoint: { x: 0, y: 0 },
+      fillLinearGradientEndPoint: { x: 0, y: H },
+      fillLinearGradientColorStops: [0, '#0a1a1c', 0.5, '#0c2226', 1, '#030c0e']
+    }));
+    // холодная лампа
+    g.add(new (K().Ellipse)({
+      x: 600, y: 170, radiusX: 420, radiusY: 60, fill: '#dffcff', shadowColor: '#bff4ff', shadowBlur: 120, opacity: 0.55
+    }));
+    // койки
+    for (let i = 0; i < 2; i++) {
+      const x = 200 + i * 620;
+      g.add(new (K().Path)({
+        data: 'M' + x + ' 1240 L' + (x + 380) + ' 1228 L' + (x + 390) + ' 1320 L' + (x - 10) + ' 1332 Z',
+        fill: '#cfe4e6', stroke: '#8fb2b8', strokeWidth: 3, opacity: 0.9
+      }));
+      g.add(new (K().Path)({
+        data: 'M' + (x + 10) + ' 1240 C' + (x + 40) + ' 1180 ' + (x + 120) + ' 1180 ' + (x + 140) + ' 1240',
+        fill: 'none', stroke: '#a9c7cc', strokeWidth: 12, lineCap: 'round', opacity: 0.8
+      }));
+      g.add(new (K().Path)({
+        data: 'M' + (x + 300) + ' 1230 L' + (x + 370) + ' 1228 L' + (x + 376) + ' 1270 L' + (x + 306) + ' 1272 Z',
+        fill: '#e8f6f8', opacity: 0.85
+      }));
+    }
+    // капельница и штатив
+    g.add(new (K().Line)({ points: [880, 900, 880, 1250], stroke: '#7fa4aa', strokeWidth: 6 }));
+    g.add(new (K().Path)({
+      data: 'M858 900 L902 900 L898 960 L862 960 Z',
+      fill: 'rgba(190,240,250,0.5)', stroke: '#9fd0d8', strokeWidth: 2
+    }));
+    // шкаф с инструментом
+    g.add(new (K().Path)({
+      data: 'M980 400 L1160 388 L1170 1180 L980 1192 Z',
+      fill: '#0e2429', stroke: '#1f4a52', strokeWidth: 3
+    }));
+    for (let i = 0; i < 5; i++) {
+      g.add(new (K().Line)({ points: [990, 480 + i * 140, 1160, 470 + i * 140], stroke: '#2b5a68', strokeWidth: 3, opacity: 0.7 }));
+    }
+    // вспомогательные нити-«датчики»
+    g.add(new (K().Path)({
+      data: 'M120 500 C160 700 140 900 200 1100', stroke: '#9fd0d8', strokeWidth: 2, opacity: 0.35
+    }));
+    return {};
+  };
+
+  /* --------------------------------------------------------- 20. нижнее техническое кольцо */
+  Cine.setLowerRing = function (root, p) {
+    const g = new (K().Group)();
+    root.add(g);
+    g.add(new (K().Path)({
+      data: 'M-200 -200 L' + (W + 200) + ' -200 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
+      fill: '#020a0a'
+    }));
+    const SimplexLib = Simplex();
+    const n = new SimplexLib(5150);
+    // колонны и трубы
+    for (let i = 0; i < 12; i++) {
+      const x = -60 + i * 118;
+      g.add(new (K().Line)({
+        points: [x, -100, x + n.noise2D(i, 2) * 80, 1300],
+        stroke: i % 2 ? '#0b1a1a' : '#132828', strokeWidth: 18 + (i % 3) * 10
+      }));
+      g.add(new (K().Line)({
+        points: [x - 6, -100, x - 6 + n.noise2D(i, 2) * 80, 1300],
+        stroke: 'rgba(120,220,200,0.10)', strokeWidth: 2
+      }));
+    }
+    // биолюминесцентные наросты
+    for (let i = 0; i < 40; i++) {
+      const x = 60 + Math.abs(n.noise2D(i, 11)) * 1080;
+      const y = 300 + Math.abs(n.noise2D(i, 13)) * 900;
+      const r2 = 6 + Math.abs(n.noise2D(i, 17)) * 22;
+      g.add(new (K().Circle)({
+        x: x, y: y, radius: r2,
+        fill: 'rgba(120,250,210,0.10)', stroke: 'rgba(150,255,225,0.35)', strokeWidth: 1.4
+      }));
+    }
+    // стоячая вода
+    g.add(new (K().Path)({
+      data: 'M-200 1320 L' + (W + 200) + ' 1320 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
+      fillLinearGradientStartPoint: { x: 0, y: 1320 },
+      fillLinearGradientEndPoint: { x: 0, y: 1700 },
+      fillLinearGradientColorStops: [0, 'rgba(30,110,100,0.55)', 1, 'rgba(8,40,38,0.85)']
+    }));
+    for (let i = 0; i < 14; i++) {
+      g.add(new (K().Line)({
+        points: [60 + i * 84, 1400 + (i % 4) * 60, 60 + i * 84 + 40, 1400 + (i % 4) * 60 + 10],
+        stroke: 'rgba(180,255,235,0.18)', strokeWidth: 2.2
+      }));
+    }
+    return {};
+  };
+
+  /* --------------------------------------------------------- 21. тамбур шлюза (выход) */
+  Cine.setLockRoom = function (root, p) {
+    const g = new (K().Group)();
+    root.add(g);
+    g.add(new (K().Path)({
+      data: 'M-200 -200 L' + (W + 200) + ' -200 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
+      fillLinearGradientStartPoint: { x: 0, y: 0 },
+      fillLinearGradientEndPoint: { x: 0, y: H },
+      fillLinearGradientColorStops: [0, '#0a1418', 0.5, '#0d1e24', 1, '#040a0c']
+    }));
+    // тяжёлая створка
+    g.add(new (K().Path)({
+      data: 'M240 180 L960 160 L980 1400 L220 1420 Z',
+      fill: '#16262c', stroke: '#2b4a55', strokeWidth: 6
+    }));
+    g.add(new (K().Path)({
+      data: 'M270 220 L930 200 L946 1360 L254 1380 Z',
+      fillLinearGradientStartPoint: { x: 270, y: 200 },
+      fillLinearGradientEndPoint: { x: 946, y: 1380 },
+      fillLinearGradientColorStops: [0, '#1d333b', 0.5, '#152831', 1, '#0b1a20']
+    }));
+    for (let i = 0; i < 14; i++) {
+      const a = i / 14 * Math.PI * 2;
+      g.add(new (K().Circle)({
+        x: 600 + Math.cos(a) * 300, y: 800 + Math.sin(a) * 540,
+        radius: 8, fill: '#3a6270', stroke: '#0a1418', strokeWidth: 2
+      }));
+    }
+    // штурвал в центре
+    g.add(new (K().Circle)({ x: 600, y: 800, radius: 96, stroke: '#7fd8de', strokeWidth: 8, opacity: 0.35 }));
+    g.add(new (K().Circle)({ x: 600, y: 800, radius: 26, fill: '#12242b', stroke: '#7fd8de', strokeWidth: 4, opacity: 0.6 }));
+    for (let i = 0; i < 5; i++) {
+      const a = i / 5 * Math.PI * 2;
+      g.add(new (K().Line)({
+        points: [600 + Math.cos(a) * 26, 800 + Math.sin(a) * 26, 600 + Math.cos(a) * 96, 800 + Math.sin(a) * 96],
+        stroke: '#7fd8de', strokeWidth: 5, opacity: 0.35, lineCap: 'round'
+      }));
+    }
+    // вода у порога
+    g.add(new (K().Path)({
+      data: 'M-200 1420 L' + (W + 200) + ' 1400 L' + (W + 200) + ' ' + (H + 200) + ' L-200 ' + (H + 200) + 'Z',
+      fillLinearGradientStartPoint: { x: 0, y: 1400 },
+      fillLinearGradientEndPoint: { x: 0, y: 1750 },
+      fillLinearGradientColorStops: [0, 'rgba(40,140,150,0.35)', 1, 'rgba(8,30,36,0.8)']
+    }));
+    return {};
+  };
+
 })(window);

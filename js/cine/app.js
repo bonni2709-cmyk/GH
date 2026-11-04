@@ -107,9 +107,11 @@
 
   /* ------------------------------------------------------------- сцена */
   App.pages = function () {
-    const v1 = Cine.VOL1 || [];
-    const v2 = Cine.VOL2 || [];
-    const all = v1.concat(v2);
+    const all = []
+      .concat(Cine.VOL1 || [])
+      .concat(Cine.VOL2 || [])
+      .concat(Cine.VOL3 || [])
+      .concat(Cine.VOL4 || []);
     return all.length ? all : [Cine.buildChapter1Page5];
   };
 
