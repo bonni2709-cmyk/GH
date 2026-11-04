@@ -25,6 +25,9 @@ android {
     namespace = "com.voxel.vpn"
     compileSdk = 37
 
+    // Builds libvoxeldpi.so (src/main/cpp) here and the Go core in src/main/go/build-aar.sh.
+    ndkVersion = "29.0.14206865"
+
     defaultConfig {
         applicationId = "com.voxel.vpn"
         minSdk = 24
@@ -32,7 +35,7 @@ android {
         versionCode = buildNumber
         versionName = "0.1.$buildNumber"
 
-        // The ABIs voxelcore.aar is built for (see src/main/go/build-aar.sh).
+        // The ABIs voxelcore.aar is built for (see src/main/go/build-aar.sh); libvoxeldpi.so follows the same list.
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
         }
@@ -57,6 +60,14 @@ android {
         release {
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("voxel")
+        }
+    }
+
+    // The DPI engine: a small C++17 library (SOCKS5 proxy that cuts up the first payload of each connection).
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
         }
     }
 

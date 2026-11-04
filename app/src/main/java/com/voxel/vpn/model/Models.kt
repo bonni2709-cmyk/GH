@@ -168,6 +168,10 @@ data class AppSettings(
     /** Capture IPv6 and let the DNS resolver return AAAA records. */
     val ipv6: Boolean = false,
     val logLevel: String = "warning",
+    /** DPI bypass level: `off`, `light`, `standard`, `strong` or `custom` (see `DpiMode`). */
+    val dpiMode: String = "off",
+    /** The strategy text used when [dpiMode] is `custom`. */
+    val dpiCustom: String = "",
 )
 
 /** Everything the app persists. */

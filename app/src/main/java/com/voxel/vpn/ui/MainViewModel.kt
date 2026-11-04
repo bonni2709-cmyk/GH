@@ -22,6 +22,9 @@ import com.voxel.vpn.data.withSelection
 import com.voxel.vpn.data.withSettings
 import com.voxel.vpn.data.withSource
 import com.voxel.vpn.data.withoutSubscription
+import com.voxel.vpn.dpi.DpiCheck
+import com.voxel.vpn.dpi.DpiMode
+import com.voxel.vpn.dpi.DpiStats
 import com.voxel.vpn.model.AppData
 import com.voxel.vpn.model.ServerProfile
 import com.voxel.vpn.model.Subscription
@@ -37,6 +40,7 @@ import com.voxel.vpn.parser.incy.ImportOutcome
 import com.voxel.vpn.parser.incy.ImportedSource
 import com.voxel.vpn.parser.incy.IncyImporter
 import com.voxel.vpn.parser.incy.IncyLinkException
+import com.voxel.vpn.vpn.DpiEngine
 import com.voxel.vpn.vpn.VpnController
 import com.voxel.vpn.vpn.XrayCore
 import kotlinx.coroutines.CancellationException
@@ -74,6 +78,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val connection: StateFlow<ConnectionState> = hub.state
     val traffic: StateFlow<TrafficSnapshot> = hub.traffic
     val logLines: StateFlow<List<LogLine>> = voxel.logs.lines
+    val dpiStats: StateFlow<DpiStats?> = hub.dpi
 
     private val pingResults = MutableStateFlow<Map<String, PingResult>>(emptyMap())
     private val testingIds = MutableStateFlow<Set<String>>(emptySet())
@@ -167,6 +172,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setIpv6(enabled: Boolean) {
         viewModelScope.launch { store.update { it.withSettings { s -> s.copy(ipv6 = enabled) } } }
+    }
+
+    fun setDpiMode(mode: DpiMode) {
+        viewModelScope.launch { store.update { it.withSettings { s -> s.copy(dpiMode = mode.id) } } }
+    }
+
+    fun setDpiCustom(text: String) {
+        viewModelScope.launch { store.update { it.withSettings { s -> s.copy(dpiCustom = text) } } }
+    }
+
+    /** Asks the engine whether [strategy] parses; null when the native library is not there to ask. */
+    fun checkDpi(strategy: String): DpiCheck? = try {
+        DpiEngine.check(strategy)
+    } catch (t: Throwable) {
+        null
     }
 
     fun testAll() {

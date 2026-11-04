@@ -63,6 +63,31 @@
 
     <string name="ipv6_label">IPv6</string>
 
+    <string name="dpi_pill">DPI · %1$s</string>
+    <string name="dpi_title">Обход DPI</string>
+    <string name="dpi_intro">Режет первые пакеты каждого соединения с вашим сервером на части, по которым система инспекции трафика не может его опознать. Root не нужен.</string>
+    <string name="dpi_mode_off">Выкл.</string>
+    <string name="dpi_mode_off_desc">Подключаться как обычно.</string>
+    <string name="dpi_mode_light">Лёгкий</string>
+    <string name="dpi_mode_light_desc">Делит первый пакет внутри имени сервера. Быстро и почти незаметно для сети.</string>
+    <string name="dpi_mode_standard">Стандартный</string>
+    <string name="dpi_mode_standard_desc">Делит TLS-запись и пакет внутри имени сервера. Обычный выбор.</string>
+    <string name="dpi_mode_strong">Усиленный</string>
+    <string name="dpi_mode_strong_desc">Стандартный плюс доставка первого сегмента не по порядку — для систем, которые собирают поток заново.</string>
+    <string name="dpi_mode_custom">Свой</string>
+    <string name="dpi_mode_custom_desc">Собственный рецепт из split, tlsrec, oob, disorder, fake и delay.</string>
+    <string name="dpi_custom_hint">tlsrec=sni+2; split=1,sni+2</string>
+    <string name="dpi_custom_empty">Напишите рецепт, чтобы включить этот режим.</string>
+    <string name="dpi_custom_unchecked">На этом устройстве рецепт проверить нельзя.</string>
+    <string name="dpi_custom_valid">Понято как: %1$s</string>
+    <string name="dpi_stats_title">Эта сессия</string>
+    <string name="dpi_stat_connections">Соединения</string>
+    <string name="dpi_stat_cut">Разрезано</string>
+    <string name="dpi_stat_failed">Ошибки</string>
+    <string name="dpi_stat_traffic">К серверу: ↑ %1$s  ↓ %2$s</string>
+    <string name="dpi_apply_hint">Применяется при следующем подключении.</string>
+    <string name="dpi_apply_hint_connected">Переподключитесь, чтобы изменение вступило в силу.</string>
+
     <plurals name="msg_added">
         <item quantity="one">Добавлен %1$d сервер из %2$s</item>
         <item quantity="few">Добавлено %1$d сервера из %2$s</item>

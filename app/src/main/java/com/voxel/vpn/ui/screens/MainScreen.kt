@@ -61,6 +61,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.voxel.vpn.R
 import com.voxel.vpn.core.ConnectionState
 import com.voxel.vpn.core.TrafficSnapshot
+import com.voxel.vpn.core.isActive
+import com.voxel.vpn.dpi.DpiConfig
 import com.voxel.vpn.model.ServerProfile
 import com.voxel.vpn.model.Subscription
 import com.voxel.vpn.net.PingResult
@@ -94,8 +96,10 @@ fun MainScreen(viewModel: MainViewModel) {
     val importing by viewModel.importing.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
     val logLines by viewModel.logLines.collectAsStateWithLifecycle()
+    val dpiStats by viewModel.dpiStats.collectAsStateWithLifecycle()
 
     var showLogs by rememberSaveable { mutableStateOf(false) }
+    var showDpi by rememberSaveable { mutableStateOf(false) }
     var addOpen by rememberSaveable { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<Subscription?>(null) }
 
@@ -126,8 +130,10 @@ fun MainScreen(viewModel: MainViewModel) {
                         traffic = traffic,
                         serverName = selected?.name,
                         ipv6 = data.settings.ipv6,
+                        dpi = DpiConfig.of(data.settings),
                         onToggle = viewModel::onConnectClicked,
                         onIpv6 = { viewModel.setIpv6(!data.settings.ipv6) },
+                        onDpi = { showDpi = true },
                     )
                 }
                 if (data.servers.isEmpty()) {
@@ -206,6 +212,18 @@ fun MainScreen(viewModel: MainViewModel) {
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         )
 
+        if (showDpi) {
+            DpiScreen(
+                config = DpiConfig.of(data.settings),
+                stats = dpiStats,
+                connected = connection.isActive,
+                onMode = viewModel::setDpiMode,
+                onCustom = viewModel::setDpiCustom,
+                check = viewModel::checkDpi,
+                onClose = { showDpi = false },
+            )
+        }
+
         if (showLogs) {
             LogsScreen(
                 lines = logLines,
@@ -270,8 +288,10 @@ private fun Hero(
     traffic: TrafficSnapshot,
     serverName: String?,
     ipv6: Boolean,
+    dpi: DpiConfig,
     onToggle: () -> Unit,
     onIpv6: () -> Unit,
+    onDpi: () -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -307,7 +327,17 @@ private fun Hero(
             StatsCard(sinceMs = since, traffic = traffic)
         }
         Spacer(modifier = Modifier.height(14.dp))
-        GlassPill(text = stringResource(R.string.ipv6_label), onClick = onIpv6, accent = ipv6)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            GlassPill(text = stringResource(R.string.ipv6_label), onClick = onIpv6, accent = ipv6)
+            GlassPill(
+                text = stringResource(R.string.dpi_pill, stringResource(dpiModeTitle(dpi.mode))),
+                onClick = onDpi,
+                accent = dpi.enabled,
+            )
+        }
     }
 }
 

@@ -59,6 +59,31 @@
 
     <string name="ipv6_label">IPv6</string>
 
+    <string name="dpi_pill">DPI · %1$s</string>
+    <string name="dpi_title">DPI bypass</string>
+    <string name="dpi_intro">Cuts the first packets of every connection to your server into pieces that traffic inspection cannot match. No root needed.</string>
+    <string name="dpi_mode_off">Off</string>
+    <string name="dpi_mode_off_desc">Connect as usual.</string>
+    <string name="dpi_mode_light">Light</string>
+    <string name="dpi_mode_light_desc">Splits the first packet inside the server name. Fast, and rarely noticed by the network.</string>
+    <string name="dpi_mode_standard">Standard</string>
+    <string name="dpi_mode_standard_desc">Splits the TLS record and the packet inside the server name. The usual choice.</string>
+    <string name="dpi_mode_strong">Strong</string>
+    <string name="dpi_mode_strong_desc">Standard, plus the first segment delivered out of order, for inspectors that reassemble the stream.</string>
+    <string name="dpi_mode_custom">Custom</string>
+    <string name="dpi_mode_custom_desc">Your own recipe built from split, tlsrec, oob, disorder, fake and delay.</string>
+    <string name="dpi_custom_hint">tlsrec=sni+2; split=1,sni+2</string>
+    <string name="dpi_custom_empty">Write a recipe to turn this mode on.</string>
+    <string name="dpi_custom_unchecked">The recipe cannot be checked on this device.</string>
+    <string name="dpi_custom_valid">Understood as: %1$s</string>
+    <string name="dpi_stats_title">This session</string>
+    <string name="dpi_stat_connections">Connections</string>
+    <string name="dpi_stat_cut">Cut up</string>
+    <string name="dpi_stat_failed">Failed</string>
+    <string name="dpi_stat_traffic">To the server: ↑ %1$s  ↓ %2$s</string>
+    <string name="dpi_apply_hint">Applies the next time you connect.</string>
+    <string name="dpi_apply_hint_connected">Reconnect for the change to take effect.</string>
+
     <plurals name="msg_added">
         <item quantity="one">Added %1$d server from %2$s</item>
         <item quantity="other">Added %1$d servers from %2$s</item>

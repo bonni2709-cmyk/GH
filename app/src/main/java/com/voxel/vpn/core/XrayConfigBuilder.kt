@@ -1,11 +1,14 @@
 package com.voxel.vpn.core
 
+import com.voxel.vpn.dpi.DpiRoute
 import com.voxel.vpn.model.ServerProfile
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
@@ -20,6 +23,8 @@ data class CoreOptions(
     val sniffing: Boolean = true,
     /** Pre-resolved addresses of server host names, so the core never needs the platform resolver to reach the server. */
     val resolvedHosts: Map<String, List<String>> = emptyMap(),
+    /** When set, the server connection is chained through the DPI engine's SOCKS5 proxy (if the transport allows it). */
+    val dpi: DpiRoute? = null,
 )
 
 /**
@@ -34,6 +39,9 @@ object XrayConfigBuilder {
     const val TAG_DIRECT = "direct"
     const val TAG_BLOCK = "block"
     const val TAG_DNS_OUT = "dns-out"
+
+    /** The SOCKS5 outbound that leads to the local DPI engine; the proxy outbound dials through it. */
+    const val TAG_DPI = "dpi-out"
     const val TUN_NAME = "xray0"
 
     /** Destinations that never go through the proxy: LAN, loopback, link-local, multicast. */
@@ -74,7 +82,7 @@ object XrayConfigBuilder {
         }
         putJsonArray("inbounds") { add(tunInbound(options)) }
         putJsonArray("outbounds") {
-            add(proxyOutbound(server))
+            add(proxyOutbound(server, options.dpi))
             add(
                 buildJsonObject {
                     put("tag", TAG_DIRECT)
@@ -94,6 +102,7 @@ object XrayConfigBuilder {
                     put("protocol", "dns")
                 },
             )
+            if (options.dpi != null && supportsDpi(server)) add(dpiOutbound(options.dpi))
         }
         putJsonObject("routing") {
             put("domainStrategy", "AsIs")
@@ -112,14 +121,50 @@ object XrayConfigBuilder {
         }
     }
 
-    /** The server outbound with our tag and a socket-level resolver strategy so domain addresses use the core's DNS. */
-    internal fun proxyOutbound(server: ServerProfile): JsonObject {
+    /**
+     * The server outbound with our tag and a socket-level resolver strategy so domain addresses use the core's DNS.
+     * With a [dpi] route (and a transport that runs over TCP) the connection is dialled through the DPI engine.
+     */
+    internal fun proxyOutbound(server: ServerProfile, dpi: DpiRoute? = null): JsonObject {
         val outbound = server.outbound
         val stream = outbound["streamSettings"] as? JsonObject ?: JsonObject(emptyMap())
         val sockopt = stream["sockopt"] as? JsonObject ?: JsonObject(emptyMap())
-        val newSockopt = if ("domainStrategy" in sockopt) sockopt else JsonObject(sockopt + ("domainStrategy" to JsonPrimitive("UseIP")))
+        var newSockopt = if ("domainStrategy" in sockopt) sockopt else JsonObject(sockopt + ("domainStrategy" to JsonPrimitive("UseIP")))
+        if (dpi != null && supportsDpi(outbound)) newSockopt = JsonObject(newSockopt + ("dialerProxy" to JsonPrimitive(TAG_DPI)))
         val newStream = JsonObject(stream + ("sockopt" to newSockopt))
         return JsonObject(outbound + mapOf<String, JsonElement>("tag" to JsonPrimitive(TAG_PROXY), "streamSettings" to newStream))
+    }
+
+    /** The SOCKS5 client that talks to the engine on loopback, with the per-session credentials. */
+    internal fun dpiOutbound(route: DpiRoute): JsonObject = buildJsonObject {
+        put("tag", TAG_DPI)
+        put("protocol", "socks")
+        putJsonObject("settings") {
+            put("address", "127.0.0.1")
+            put("port", route.port)
+            put("user", route.user)
+            put("pass", route.pass)
+        }
+    }
+
+    /** Transports that open an ordinary TCP connection to the server: the only ones the DPI engine can reshape. */
+    private val TCP_TRANSPORTS = setOf("tcp", "raw", "ws", "httpupgrade", "grpc", "xhttp", "splithttp")
+
+    /** Protocols that talk UDP (QUIC) or have no server connection of their own. */
+    private val NON_TCP_PROTOCOLS = setOf("hysteria", "wireguard", "freedom", "blackhole", "dns", "loopback")
+
+    fun supportsDpi(server: ServerProfile): Boolean = supportsDpi(server.outbound)
+
+    internal fun supportsDpi(outbound: JsonObject): Boolean {
+        val protocol = (outbound["protocol"] as? JsonPrimitive)?.contentOrNull?.lowercase() ?: return false
+        if (protocol in NON_TCP_PROTOCOLS) return false
+        val stream = outbound["streamSettings"] as? JsonObject
+        val network = (stream?.get("network") as? JsonPrimitive)?.contentOrNull?.lowercase() ?: "tcp"
+        if (network !in TCP_TRANSPORTS) return false
+        // XHTTP can run over HTTP/3, which is QUIC on UDP.
+        val alpn = (stream?.get("tlsSettings") as? JsonObject)?.get("alpn") as? JsonArray
+        if (alpn != null && alpn.any { (it as? JsonPrimitive)?.contentOrNull.equals("h3", ignoreCase = true) }) return false
+        return true
     }
 
     private fun tunInbound(options: CoreOptions): JsonObject = buildJsonObject {

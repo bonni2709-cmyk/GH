@@ -1,6 +1,7 @@
 package com.voxel.vpn.core
 
 import com.voxel.vpn.Samples
+import com.voxel.vpn.dpi.DpiRoute
 import com.voxel.vpn.model.ServerProfile
 import com.voxel.vpn.parser.Base64Codec
 import com.voxel.vpn.parser.LinkParseResult
@@ -129,6 +130,123 @@ class XrayConfigBuilderTest {
         assertEquals(emptyList<String>(), XrayConfigBuilder.hostsToResolve(profile("vless://${Samples.UUID}@[2001:db8::7]:443?security=tls&sni=a.b")))
     }
 
+    private val route = DpiRoute(port = 40123, user = "u-1234", pass = "p-5678")
+
+    private fun outbounds(c: JsonObject) = c.arr("outbounds").objects()
+
+    private fun JsonObject.proxy() = outbounds(this).first { it.str("tag") == "proxy" }
+
+    private fun JsonObject.sockopt() = proxy().obj("streamSettings").obj("sockopt")
+
+    @Test
+    fun dpiRouteAddsASocksOutboundAndChainsTheProxyThroughIt() {
+        val c = config(Samples.VLESS_REALITY, CoreOptions(dpi = route))
+        assertEquals(listOf("proxy", "direct", "block", "dns-out", "dpi-out"), outbounds(c).map { it.str("tag") })
+
+        val dpi = outbounds(c).last()
+        assertEquals("socks", dpi.str("protocol"))
+        val settings = dpi.obj("settings")
+        assertEquals("127.0.0.1", settings.str("address"))
+        assertEquals(40123, settings.getValue("port").jsonPrimitive.int)
+        assertEquals("u-1234", settings.str("user"))
+        assertEquals("p-5678", settings.str("pass"))
+        // The flat form: the core builds one server from it; a `servers` array would be a different shape.
+        assertFalse(settings.containsKey("servers"))
+
+        assertEquals("dpi-out", c.sockopt().str("dialerProxy"))
+        assertEquals("UseIP", c.sockopt().str("domainStrategy"))
+        // Reality itself is untouched, only the way the TCP connection is made changes.
+        assertEquals("reality", c.proxy().obj("streamSettings").str("security"))
+    }
+
+    @Test
+    fun routingNeverSendsTrafficToTheEngineDirectly() {
+        val c = config(Samples.VLESS_REALITY, CoreOptions(dpi = route))
+        val rules = c.obj("routing").arr("rules").objects()
+        assertEquals(4, rules.size)
+        assertTrue(rules.none { it.str("outboundTag") == "dpi-out" })
+        assertEquals(config(Samples.VLESS_REALITY).obj("routing"), c.obj("routing"))
+    }
+
+    @Test
+    fun withoutARouteNothingTouchesTheProxyOutbound() {
+        val c = config(Samples.VLESS_REALITY)
+        assertNull(c.sockopt()["dialerProxy"])
+        assertTrue(outbounds(c).none { it.str("tag") == "dpi-out" })
+        assertEquals(XrayConfigBuilder.build(profile(Samples.VLESS_REALITY)), XrayConfigBuilder.build(profile(Samples.VLESS_REALITY), CoreOptions(dpi = null)))
+    }
+
+    @Test
+    fun everyTcpTransportIsChained() {
+        val links = mapOf(
+            "tcp reality" to Samples.VLESS_REALITY,
+            "ws" to Samples.VLESS_WS_TLS,
+            "grpc" to "vless://${Samples.UUID}@g.example.com:443?security=tls&type=grpc&serviceName=svc&mode=multi&sni=g.example.com&alpn=h2",
+            "xhttp" to "vless://${Samples.UUID}@x.example.com:443?security=tls&type=xhttp&path=%2Fx&host=x.example.com&mode=packet-up",
+            "httpupgrade" to "vless://${Samples.UUID}@h.example.com:443?security=tls&type=httpupgrade&path=%2Fhu&host=h.example.com",
+            "plain tcp" to "vless://${Samples.UUID}@192.168.1.5:443#lan",
+            "trojan" to "trojan://secret@t.example.com:443?sni=t.example.com#t",
+        )
+        links.forEach { (name, link) ->
+            val c = config(link, CoreOptions(dpi = route))
+            assertEquals("$name must dial through the engine", "dpi-out", c.sockopt().str("dialerProxy"))
+            assertTrue("$name needs the socks outbound", outbounds(c).any { it.str("tag") == "dpi-out" })
+        }
+    }
+
+    @Test
+    fun http3TransportsAreLeftAlone() {
+        val xhttpH3 = "vless://${Samples.UUID}@x.example.com:443?security=tls&type=xhttp&path=%2Fx&host=x.example.com&alpn=h3"
+        val c = config(xhttpH3, CoreOptions(dpi = route))
+        assertNull(c.sockopt()["dialerProxy"])
+        assertTrue(outbounds(c).none { it.str("tag") == "dpi-out" })
+        assertFalse(XrayConfigBuilder.supportsDpi(profile(xhttpH3)))
+        // h3 listed beside other protocols still means QUIC may be used.
+        val mixed = "vless://${Samples.UUID}@x.example.com:443?security=tls&type=xhttp&path=%2Fx&alpn=h3%2Ch2"
+        assertFalse(XrayConfigBuilder.supportsDpi(profile(mixed)))
+        // h2 and http/1.1 only: TCP.
+        assertTrue(XrayConfigBuilder.supportsDpi(profile("vless://${Samples.UUID}@x.example.com:443?security=tls&type=xhttp&path=%2Fx&alpn=h2")))
+    }
+
+    @Test
+    fun udpTransportsAndProtocolsAreNeverChained() {
+        fun outbound(json: String) = Json.parseToJsonElement(json).jsonObject
+        val header = """"settings":{"address":"h.example.com","port":443,"id":"x","encryption":"none"}"""
+        assertFalse(XrayConfigBuilder.supportsDpi(outbound("""{"protocol":"vless",$header,"streamSettings":{"network":"kcp"}}""")))
+        assertFalse(XrayConfigBuilder.supportsDpi(outbound("""{"protocol":"vless",$header,"streamSettings":{"network":"mkcp"}}""")))
+        assertFalse(XrayConfigBuilder.supportsDpi(outbound("""{"protocol":"vless",$header,"streamSettings":{"network":"hysteria"}}""")))
+        assertFalse(XrayConfigBuilder.supportsDpi(outbound("""{"protocol":"vless",$header,"streamSettings":{"network":"quic"}}""")))
+        assertFalse(XrayConfigBuilder.supportsDpi(outbound("""{"protocol":"hysteria",$header}""")))
+        assertFalse(XrayConfigBuilder.supportsDpi(outbound("""{"protocol":"wireguard","settings":{}}""")))
+        assertFalse(XrayConfigBuilder.supportsDpi(outbound("""{"settings":{}}""")))
+        // No stream settings at all is plain TCP.
+        assertTrue(XrayConfigBuilder.supportsDpi(outbound("""{"protocol":"vless",$header}""")))
+        assertTrue(XrayConfigBuilder.supportsDpi(outbound("""{"protocol":"vless",$header,"streamSettings":{"network":"RAW"}}""")))
+        assertTrue(XrayConfigBuilder.supportsDpi(outbound("""{"protocol":"socks","settings":{"address":"1.2.3.4","port":1080}}""")))
+    }
+
+    @Test
+    fun anExistingSockoptSurvivesTheChaining() {
+        val outbound = Json.parseToJsonElement(
+            """{"protocol":"vless","settings":{"address":"h.example.com","port":443,"id":"x","encryption":"none"},
+               "streamSettings":{"network":"ws","security":"tls","sockopt":{"tcpFastOpen":true,"mark":255}}}""",
+        ).jsonObject
+        val server = ServerProfile.fromOutbound(outbound, "x")!!
+        val sockopt = XrayConfigBuilder.proxyOutbound(server, route).obj("streamSettings").obj("sockopt")
+        assertEquals("dpi-out", sockopt.str("dialerProxy"))
+        assertEquals("UseIP", sockopt.str("domainStrategy"))
+        assertTrue(sockopt.getValue("tcpFastOpen").jsonPrimitive.boolean)
+        assertEquals(255, sockopt.getValue("mark").jsonPrimitive.int)
+    }
+
+    @Test
+    fun theEngineCredentialsAppearOnlyInTheSocksOutbound() {
+        val text = XrayConfigBuilder.build(profile(Samples.VLESS_REALITY), CoreOptions(dpi = route))
+        // The credentials appear exactly once, in the socks outbound.
+        assertEquals(1, Regex("u-1234").findAll(text).count())
+        assertEquals(1, Regex("p-5678").findAll(text).count())
+    }
+
     /**
      * Writes one generated config per protocol/transport to `voxel.configDumpDir` when that system property is set.
      * CI feeds these files to the real Xray-core (go test) to prove that the core accepts every shape we generate.
@@ -164,5 +282,15 @@ class XrayConfigBuilderTest {
         samples.forEach { (name, link) ->
             File(dir, "$name.json").writeText(XrayConfigBuilder.build(profile(link), CoreOptions(resolvedHosts = resolved, ipv6 = name.contains("ipv6"))))
         }
+        // The same servers chained through the DPI engine, plus an HTTP/3 server that must not be.
+        val chained = listOf(
+            "reality", "vless-ws-tls", "vless-grpc", "vless-xhttp", "vless-httpupgrade", "vless-tcp-http-obfs", "vmess-ws-tls", "trojan", "ss-aead",
+        )
+        chained.forEach { name ->
+            val link = samples.getValue(name)
+            File(dir, "dpi-$name.json").writeText(XrayConfigBuilder.build(profile(link), CoreOptions(resolvedHosts = resolved, dpi = route)))
+        }
+        val h3 = "vless://${Samples.UUID}@x.example.com:443?security=tls&type=xhttp&path=%2Fx&host=x.example.com&mode=packet-up&alpn=h3"
+        File(dir, "dpi-skipped-xhttp-h3.json").writeText(XrayConfigBuilder.build(profile(h3), CoreOptions(resolvedHosts = resolved, dpi = route)))
     }
 }

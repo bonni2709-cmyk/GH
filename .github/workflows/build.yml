@@ -71,6 +71,73 @@ jobs:
           path: app/libs/voxelcore.aar
           key: ${{ steps.key.outputs.value }}
 
+  dpi:
+    # The C++ DPI engine (app/src/main/cpp) built for the runner with AddressSanitizer and UndefinedBehaviorSanitizer,
+    # its unit tests, and a network lab: four network namespaces with a DPI box in the middle that resets every TLS
+    # connection whose first packets carry a blocked server name. The lab shows that the engine gets a connection
+    # through that the plain client cannot, and that the weaker presets stay blocked by the stronger inspectors.
+    name: DPI engine (C++ build, unit tests, network lab)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install the build and lab tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends cmake ninja-build iproute2 openssl curl iputils-ping
+          # Kernels with a 32 bit mmap entropy break the sanitizers' shadow memory layout at start-up.
+          sudo sysctl -q vm.mmap_rnd_bits=28 || true
+          echo "::notice title=Tools::$(cmake --version | sed -n 1p), $(g++ --version | sed -n 1p), $(openssl version), kernel $(uname -r), $(nproc) CPUs"
+
+      - name: Build (sanitizers, warnings are errors)
+        id: build
+        run: |
+          set -o pipefail
+          {
+            cmake -S app/src/main/cpp -B "$RUNNER_TEMP/dpi" -G Ninja -DCMAKE_BUILD_TYPE=Debug \
+              -DVOXEL_DPI_SANITIZE=ON -DVOXEL_DPI_WERROR=ON
+            cmake --build "$RUNNER_TEMP/dpi"
+          } 2>&1 | tee "$RUNNER_TEMP/dpi-build.log"
+
+      - name: Report the build failure
+        if: failure() && steps.build.outcome == 'failure'
+        run: python3 .github/scripts/annotate_log.py "$RUNNER_TEMP/dpi-build.log" "DPI engine build"
+
+      - name: Unit tests
+        id: unit
+        run: |
+          set -o pipefail
+          "$RUNNER_TEMP/dpi/voxel-dpi-tests" 2>&1 | tee "$RUNNER_TEMP/dpi-unit.log"
+
+      - name: Report the unit test failure
+        if: failure() && steps.unit.outcome == 'failure'
+        run: python3 .github/scripts/annotate_log.py "$RUNNER_TEMP/dpi-unit.log" "DPI engine unit tests"
+
+      - name: Unit test totals
+        if: always() && steps.unit.outcome != 'skipped'
+        run: echo "::notice title=DPI unit tests::$(grep -E '^[0-9]+ tests, ' "$RUNNER_TEMP/dpi-unit.log" | tail -n 1)"
+
+      - name: Network lab
+        id: lab
+        run: |
+          set -o pipefail
+          sudo python3 .github/scripts/dpi_lab.py --engine "$RUNNER_TEMP/dpi/voxel-dpi" --report "$RUNNER_TEMP/dpi-lab.txt" 2>&1 | tee "$RUNNER_TEMP/dpi-lab.log"
+
+      - name: Report the lab failure
+        if: failure() && steps.lab.outcome == 'failure'
+        run: |
+          tail -n 60 "$RUNNER_TEMP/dpi-lab.log" | python3 -c 'import sys; print("::error title=DPI lab::" + sys.stdin.read().replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+
+      - name: Lab report
+        if: always() && steps.lab.outcome != 'skipped'
+        run: |
+          [ -f "$RUNNER_TEMP/dpi-lab.txt" ] || exit 0
+          head -c 12000 "$RUNNER_TEMP/dpi-lab.txt" | python3 -c 'import sys; print("::notice title=DPI lab report::" + sys.stdin.read().replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+
   app:
     name: Android app (unit tests, Xray config check, APK)
     needs: core
@@ -110,10 +177,11 @@ jobs:
           go-version-file: app/src/main/go/go.mod
           cache-dependency-path: app/src/main/go/go.sum
 
+      # The NDK and CMake build libvoxeldpi.so (the DPI engine) inside the Gradle build.
       - uses: android-actions/setup-android@v4
         with:
           cmdline-tools-version: 14742923
-          packages: "platform-tools"
+          packages: "platform-tools ndk;${{ env.NDK_VERSION }} cmake;3.22.1"
 
       - uses: gradle/actions/setup-gradle@v6
 
@@ -189,10 +257,41 @@ jobs:
             "$tools/apksigner" verify --verbose --print-certs "$apk"
             echo '```'
             echo '```'
-            unzip -l "$apk" | grep -E "lib/[^/]+/libgojni.so|classes[0-9]*.dex|AndroidManifest.xml"
+            unzip -l "$apk" | grep -E "lib/[^/]+/(libgojni|libvoxeldpi).so|classes[0-9]*.dex|AndroidManifest.xml"
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
           "$tools/aapt2" dump badging "$apk" | grep -E "^(package|native-code)" | sed 's/^/::notice title=APK::/'
+
+      # Both native libraries must be in the APK for every ABI, and the DPI library must export the JNI entry
+      # points that DpiEngine.kt declares (a misspelled symbol would otherwise only fail on a device).
+      - name: Native libraries of the APK
+        run: |
+          apk="$(ls app/build/outputs/apk/release/*.apk | head -n1)"
+          unzip -Z1 "$apk" > "$RUNNER_TEMP/apk-files.txt"
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            for lib in libgojni.so libvoxeldpi.so; do
+              if ! grep -qx "lib/$abi/$lib" "$RUNNER_TEMP/apk-files.txt"; then
+                echo "::error title=APK::lib/$abi/$lib is missing from the APK"
+                exit 1
+              fi
+            done
+          done
+          unzip -p "$apk" lib/x86_64/libvoxeldpi.so > "$RUNNER_TEMP/libvoxeldpi.so"
+          nm -D --defined-only "$RUNNER_TEMP/libvoxeldpi.so" | awk '{print $3}' > "$RUNNER_TEMP/exported.txt"
+          grep -o 'external fun native[A-Za-z]*' app/src/main/java/com/voxel/vpn/vpn/DpiEngine.kt | sed 's/external fun //' > "$RUNNER_TEMP/declared.txt"
+          declared="$(grep -c . "$RUNNER_TEMP/declared.txt" || true)"
+          if [ "$declared" -lt 7 ]; then
+            echo "::error title=JNI::only $declared native functions found in DpiEngine.kt"
+            exit 1
+          fi
+          while read -r name; do
+            if ! grep -qx "Java_com_voxel_vpn_vpn_DpiEngine_$name" "$RUNNER_TEMP/exported.txt"; then
+              echo "::error title=JNI::libvoxeldpi.so does not export Java_com_voxel_vpn_vpn_DpiEngine_$name"
+              exit 1
+            fi
+          done < "$RUNNER_TEMP/declared.txt"
+          sizes="$(unzip -l "$apk" | awk '/libvoxeldpi.so/ {printf "%s ", $1}')"
+          echo "::notice title=Native libraries::libgojni.so and libvoxeldpi.so for arm64-v8a, armeabi-v7a, x86_64; $declared JNI functions exported; libvoxeldpi.so sizes: $sizes"
 
       - name: Keep the APK for the export and e2e jobs
         uses: actions/cache/save@v6

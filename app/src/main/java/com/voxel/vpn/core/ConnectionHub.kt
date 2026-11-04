@@ -1,5 +1,6 @@
 package com.voxel.vpn.core
 
+import com.voxel.vpn.dpi.DpiStats
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -63,16 +64,27 @@ class SpeedMeter {
 class ConnectionHub {
     private val connection = MutableStateFlow<ConnectionState>(ConnectionState.Idle)
     private val usage = MutableStateFlow(TrafficSnapshot())
+    private val dpiUsage = MutableStateFlow<DpiStats?>(null)
 
     val state: StateFlow<ConnectionState> = connection.asStateFlow()
     val traffic: StateFlow<TrafficSnapshot> = usage.asStateFlow()
 
+    /** Counters of the DPI engine; null while it is not running. */
+    val dpi: StateFlow<DpiStats?> = dpiUsage.asStateFlow()
+
     fun set(next: ConnectionState) {
-        if (next !is ConnectionState.Connected) usage.value = TrafficSnapshot()
+        if (next !is ConnectionState.Connected) {
+            usage.value = TrafficSnapshot()
+            dpiUsage.value = null
+        }
         connection.value = next
     }
 
     fun setTraffic(snapshot: TrafficSnapshot) {
         if (connection.value is ConnectionState.Connected) usage.value = snapshot
+    }
+
+    fun setDpi(stats: DpiStats?) {
+        if (connection.value is ConnectionState.Connected) dpiUsage.value = stats
     }
 }

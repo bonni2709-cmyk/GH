@@ -141,3 +141,49 @@ func TestXrayRejectsBrokenVariantsOfAGeneratedConfig(t *testing.T) {
 		}
 	}
 }
+
+// The configurations chained through the DPI engine: the proxy outbound dials through a local SOCKS5 outbound.
+func TestDpiConfigsAreAcceptedAndReallyChainTheProxyOutbound(t *testing.T) {
+	dir := configDir(t)
+	files, err := filepath.Glob(filepath.Join(dir, "dpi-*.json"))
+	if err != nil || len(files) < 5 {
+		t.Fatalf("expected the DPI configs in %s, found %d (%v)", dir, len(files), err)
+	}
+	chained := 0
+	for _, file := range files {
+		name := strings.TrimSuffix(filepath.Base(file), ".json")
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(data)
+		if err := ValidateConfig(text); err != nil {
+			t.Errorf("%s: Xray-core rejected the config: %v", name, err)
+			continue
+		}
+		if strings.HasPrefix(name, "dpi-skipped-") {
+			// UDP based transports must keep their own sockets.
+			if strings.Contains(text, "dialerProxy") || strings.Contains(text, `"tag":"dpi-out"`) {
+				t.Errorf("%s: a QUIC transport must not be chained through the engine", name)
+			}
+			continue
+		}
+		chained++
+		for _, want := range []string{`"dialerProxy":"dpi-out"`, `"tag":"dpi-out"`, `"protocol":"socks"`, `"address":"127.0.0.1"`} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s: the config does not contain %s", name, want)
+			}
+		}
+		// Negative control: a socks outbound without an address is not a valid single server.
+		broken := strings.Replace(text, `"address":"127.0.0.1"`, `"host":"127.0.0.1"`, 1)
+		if broken == text {
+			t.Fatalf("%s: test fixture did not change the config", name)
+		}
+		if err := ValidateConfig(broken); err == nil {
+			t.Errorf("%s: Xray-core accepted a socks outbound without an address", name)
+		}
+	}
+	if chained < 5 {
+		t.Fatalf("only %d chained configs were checked", chained)
+	}
+}

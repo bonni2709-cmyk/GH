@@ -19,6 +19,8 @@ import com.voxel.vpn.core.ConnectionState
 import com.voxel.vpn.core.CoreOptions
 import com.voxel.vpn.core.SpeedMeter
 import com.voxel.vpn.core.XrayConfigBuilder
+import com.voxel.vpn.dpi.DpiConfig
+import com.voxel.vpn.dpi.DpiRoute
 import com.voxel.vpn.model.ServerProfile
 import com.voxel.vpn.net.ChainHostResolver
 import com.voxel.vpn.net.DohHostResolver
@@ -51,6 +53,10 @@ class VoxelVpnService : VpnService() {
 
     @Volatile
     private var currentServerId: String? = null
+
+    /** The DPI engine is running for the current session and has to be stopped with it. */
+    @Volatile
+    private var dpiActive = false
 
     override fun onCreate() {
         super.onCreate()
@@ -135,9 +141,10 @@ class VoxelVpnService : VpnService() {
 
             val settings = voxel.store.data.value.settings
             val resolved = resolveServerHosts(server, settings.ipv6)
+            val dpi = startDpi(DpiConfig.of(settings), server, resolved)
             val config = XrayConfigBuilder.build(
                 server,
-                CoreOptions(ipv6 = settings.ipv6, logLevel = settings.logLevel, resolvedHosts = resolved),
+                CoreOptions(ipv6 = settings.ipv6, logLevel = settings.logLevel, resolvedHosts = resolved, dpi = dpi),
             )
             withContext(Dispatchers.Default) { XrayCore.validate(config) }
 
@@ -163,6 +170,31 @@ class VoxelVpnService : VpnService() {
             teardown()
             hub.set(ConnectionState.Failed(message))
             finishService()
+        }
+    }
+
+    /**
+     * Starts the DPI engine when the user turned it on and the server's transport runs over TCP. A failure never
+     * stops the connection: the VPN comes up without the bypass and the reason goes to the log.
+     */
+    private suspend fun startDpi(config: DpiConfig, server: ServerProfile, resolved: Map<String, List<String>>): DpiRoute? {
+        if (!config.enabled) return null
+        if (!XrayConfigBuilder.supportsDpi(server)) {
+            voxel.logs.info("dpi", "Skipped: ${server.network} does not run over TCP, there is nothing to cut up")
+            return null
+        }
+        // From here on teardown() stops the engine, even if this coroutine is cancelled halfway through the start.
+        dpiActive = true
+        return try {
+            val route = withContext(Dispatchers.IO) { DpiEngine.start(config.strategy, resolved) }
+            voxel.logs.info("dpi", "Engine on 127.0.0.1:${route.port}, strategy ${config.strategy}")
+            route
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            dpiActive = false
+            voxel.logs.error("dpi", "Not started, connecting without it: ${e.message ?: e.javaClass.simpleName}")
+            null
         }
     }
 
@@ -215,6 +247,10 @@ class VoxelVpnService : VpnService() {
                 SystemClock.elapsedRealtime(),
             )
             voxel.hub.setTraffic(snapshot)
+            if (dpiActive) {
+                DpiEngine.drainLog(voxel.logs)
+                voxel.hub.setDpi(DpiEngine.stats())
+            }
             tick++
             if (tick % 2 == 0) {
                 val speed = "↓ ${Format.speed(snapshot.downloadBps)}  ↑ ${Format.speed(snapshot.uploadBps)}"
@@ -228,6 +264,15 @@ class VoxelVpnService : VpnService() {
             XrayCore.stop()
         } catch (e: Throwable) {
             voxel.logs.warn("vpn", "Stopping the core: ${e.message ?: e.javaClass.simpleName}")
+        }
+        if (dpiActive) {
+            dpiActive = false
+            try {
+                DpiEngine.drainLog(voxel.logs)
+                DpiEngine.stop()
+            } catch (e: Throwable) {
+                voxel.logs.warn("vpn", "Stopping the DPI engine: ${e.message ?: e.javaClass.simpleName}")
+            }
         }
         val pfd = tun
         tun = null
