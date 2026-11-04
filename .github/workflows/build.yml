@@ -1,0 +1,56 @@
+name: Build VOXEL VPN
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NDK_VERSION: "29.0.14206865"
+
+jobs:
+  core:
+    name: Xray-core AAR (Go + gomobile)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: app/src/main/go/go.mod
+          cache-dependency-path: app/src/main/go/go.sum
+
+      - name: Go vet and tests of the core facade
+        working-directory: app/src/main/go
+        run: |
+          go vet ./...
+          go test ./... -count=1 -v
+
+      - uses: android-actions/setup-android@v4
+        with:
+          cmdline-tools-version: 14742923
+          packages: "platform-tools ndk;${{ env.NDK_VERSION }}"
+
+      - name: Build voxelcore.aar
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION"
+          bash app/src/main/go/build-aar.sh
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: voxelcore-aar
+          path: app/libs/voxelcore.aar
+          if-no-files-found: error
+          retention-days: 7

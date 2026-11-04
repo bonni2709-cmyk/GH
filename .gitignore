@@ -1,0 +1,19 @@
+# Gradle / Android
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Generated Xray-core binding (built by app/src/main/go/build-aar.sh, never committed)
+app/libs/*.aar
+app/src/main/go/*.aar
+app/src/main/go/*-sources.jar
+
+# Signing material other than the committed development key
+*.jks
+keystore.properties
