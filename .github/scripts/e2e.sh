@@ -115,6 +115,12 @@ view "incy://add/http://10.0.2.2:9000/sub.txt"
 wait_ui '(text|content-desc)="[^"]*E2E server' 40 || fail "the subscription was not imported (no 'E2E server' on the screen)"
 sleep 2
 shot 02-imported
+adb shell input swipe 360 1000 360 350 400
+sleep 2
+shot 02b-servers
+notice "screen texts after scrolling to the list: $(ui | python3 "$UITOOL" texts | tr '\n' '|' | head -c 700)"
+adb shell input swipe 360 350 360 1100 400
+sleep 1
 notice "2/6 the incy://add link imported the subscription: $(app_log | grep -E ' import: ' | tail -n 1 | sed 's/.*VOXEL *: //')"
 
 # ---- 3. connect -----------------------------------------------------------------------------------------------

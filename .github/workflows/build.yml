@@ -381,7 +381,7 @@ jobs:
         run: |
           for log in "$RUNNER_TEMP/e2e/xray.log" "$RUNNER_TEMP/e2e/web.log"; do
             [ -f "$log" ] || continue
-            echo "::notice title=$(basename "$log")::$(tail -n 15 "$log" | head -c 3000 | python3 -c 'import sys; sys.stdout.write(sys.stdin.read().replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))')"
+            echo "::notice title=$(basename "$log")::$(tail -n 40 "$log" | head -c 6000 | python3 -c 'import sys; sys.stdout.write(sys.stdin.read().replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))')"
           done
 
       - name: Export the screenshots and logs as git blobs
