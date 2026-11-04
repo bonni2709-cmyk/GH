@@ -40,12 +40,12 @@ import com.voxel.vpn.parser.incy.IncyLinkException
 import com.voxel.vpn.vpn.VpnController
 import com.voxel.vpn.vpn.XrayCore
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -80,14 +80,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val refreshingIds = MutableStateFlow<Set<String>>(emptySet())
     private val importBusy = MutableStateFlow(false)
     private val currentMessage = MutableStateFlow<UiMessage?>(null)
-    private val uiEvents = MutableSharedFlow<UiEvent>(extraBufferCapacity = 8)
+    // A channel keeps an event until the activity is on screen again: a link that opens the app from the background
+    // reaches the view model while the activity is still stopped, and a dropped event would swallow the permission prompt.
+    private val uiEvents = Channel<UiEvent>(Channel.BUFFERED)
 
     val pings: StateFlow<Map<String, PingResult>> = pingResults.asStateFlow()
     val testing: StateFlow<Set<String>> = testingIds.asStateFlow()
     val refreshing: StateFlow<Set<String>> = refreshingIds.asStateFlow()
     val importing: StateFlow<Boolean> = importBusy.asStateFlow()
     val message: StateFlow<UiMessage?> = currentMessage.asStateFlow()
-    val events: SharedFlow<UiEvent> = uiEvents.asSharedFlow()
+    val events: Flow<UiEvent> = uiEvents.receiveAsFlow()
 
     val versionLabel: String by lazy {
         val core = try {
@@ -122,7 +124,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         if (!notificationsPrompted && needsNotificationPermission()) {
             notificationsPrompted = true
-            uiEvents.tryEmit(UiEvent.AskNotificationPermission)
+            uiEvents.trySend(UiEvent.AskNotificationPermission)
             return
         }
         requestVpnPermissionThenStart()
@@ -142,7 +144,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun requestVpnPermissionThenStart() {
         val intent = VpnController.permissionIntent(getApplication())
-        if (intent != null) uiEvents.tryEmit(UiEvent.AskVpnPermission(intent)) else startVpn(null)
+        if (intent != null) uiEvents.trySend(UiEvent.AskVpnPermission(intent)) else startVpn(null)
     }
 
     private fun startVpn(serverId: String?) {

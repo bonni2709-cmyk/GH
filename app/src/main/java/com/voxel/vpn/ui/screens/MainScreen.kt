@@ -67,11 +67,13 @@ import com.voxel.vpn.net.PingResult
 import com.voxel.vpn.ui.Format
 import com.voxel.vpn.ui.MainViewModel
 import com.voxel.vpn.ui.UiMessage
+import com.voxel.vpn.ui.components.CloseGlyph
 import com.voxel.vpn.ui.components.ConnectButton
 import com.voxel.vpn.ui.components.GlassCard
 import com.voxel.vpn.ui.components.GlassIconButton
 import com.voxel.vpn.ui.components.GlassPill
 import com.voxel.vpn.ui.components.LogsGlyph
+import com.voxel.vpn.ui.components.PlusGlyph
 import com.voxel.vpn.ui.components.Tag
 import com.voxel.vpn.ui.components.UsageBar
 import com.voxel.vpn.ui.components.VoxelBackground
@@ -94,6 +96,7 @@ fun MainScreen(viewModel: MainViewModel) {
     val logLines by viewModel.logLines.collectAsStateWithLifecycle()
 
     var showLogs by rememberSaveable { mutableStateOf(false) }
+    var addOpen by rememberSaveable { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<Subscription?>(null) }
 
     val clipboardEmptyText = stringResource(R.string.msg_clipboard_empty)
@@ -127,16 +130,34 @@ fun MainScreen(viewModel: MainViewModel) {
                         onIpv6 = { viewModel.setIpv6(!data.settings.ipv6) },
                     )
                 }
-                item(key = "add") {
-                    AddCard(
-                        busy = importing,
-                        onSubmit = viewModel::importText,
-                        onEmptyClipboard = { viewModel.say(clipboardEmptyText) },
-                    )
-                }
-                if (data.servers.isNotEmpty()) {
+                if (data.servers.isEmpty()) {
+                    item(key = "add") {
+                        AddCard(
+                            busy = importing,
+                            onSubmit = viewModel::importText,
+                            onEmptyClipboard = { viewModel.say(clipboardEmptyText) },
+                        )
+                    }
+                } else {
                     item(key = "servers-title") {
-                        ServersTitle(testing = testing.isNotEmpty(), onTestAll = viewModel::testAll)
+                        ServersTitle(
+                            testing = testing.isNotEmpty(),
+                            addOpen = addOpen,
+                            onToggleAdd = { addOpen = !addOpen },
+                            onTestAll = viewModel::testAll,
+                        )
+                    }
+                    if (addOpen) {
+                        item(key = "add") {
+                            AddCard(
+                                busy = importing,
+                                onSubmit = { value ->
+                                    addOpen = false
+                                    viewModel.importText(value)
+                                },
+                                onEmptyClipboard = { viewModel.say(clipboardEmptyText) },
+                            )
+                        }
                     }
                 }
                 data.subscriptions.forEach { subscription ->
@@ -434,12 +455,13 @@ private fun AddCard(busy: Boolean, onSubmit: (String) -> Unit, onEmptyClipboard:
 }
 
 @Composable
-private fun ServersTitle(testing: Boolean, onTestAll: () -> Unit) {
+private fun ServersTitle(testing: Boolean, addOpen: Boolean, onToggleAdd: () -> Unit, onTestAll: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Text(
             text = stringResource(R.string.section_servers),
@@ -452,6 +474,16 @@ private fun ServersTitle(testing: Boolean, onTestAll: () -> Unit) {
             onClick = onTestAll,
             enabled = !testing,
         )
+        GlassIconButton(
+            onClick = onToggleAdd,
+            contentDescription = stringResource(if (addOpen) R.string.action_close else R.string.action_add),
+        ) {
+            if (addOpen) {
+                CloseGlyph(color = VoxelColors.TextPrimary, modifier = Modifier.size(20.dp))
+            } else {
+                PlusGlyph(color = VoxelColors.TextPrimary, modifier = Modifier.size(20.dp))
+            }
+        }
     }
 }
 

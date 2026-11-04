@@ -43,20 +43,29 @@ Entries the core cannot run (ShadowsocksR, TUIC, Hysteria, WireGuard/AmneziaWG, 
 CI does everything; a push to any branch runs `.github/workflows/build.yml`:
 
 1. **core**: `go vet`, `go test`, then `gomobile bind` produces `voxelcore.aar` (arm64-v8a, armeabi-v7a, x86_64).
-2. **app**: the JVM unit tests run first and write every Xray configuration the builder can produce; the Go test
-   then loads each of them into the real Xray-core and also checks that broken variants are rejected; finally the
-   signed release APK is built and uploaded as `voxel-vpn-apk`.
-   Android lint runs next to it (it reports, it does not block).
-3. **export**: on pushes the APK is also stored as git blobs of at most 15 MB (their shas are printed in the job
+   The AAR is kept in the Actions cache, keyed by the NDK version and the hash of the Go sources, so the core is
+   rebuilt only when it changes.
+2. **app**: restores the AAR, runs the JVM unit tests (they also write every Xray configuration the builder can
+   produce), lets the Go test load each of those configurations into the real Xray-core (broken variants must be
+   rejected), and builds the signed release APK. Android lint runs next to it (it reports, it does not block).
+3. **export**: on pushes the APK is stored as git blobs of at most 15 MB (their shas are printed in the job
    annotations, in order), so it can be fetched with the plain REST API where the artifact hosts are not reachable:
    `for sha in <sha1> <sha2> ...; do gh api repos/<owner>/<repo>/git/blobs/$sha -H 'Accept: application/vnd.github.raw'; done > voxel-vpn.apk`.
-4. **e2e**: an Android 14 emulator installs the APK and drives it for real. An `incy://add/...` link imports a
-   subscription from a web server on the runner, `incy://connect` brings the VPN up, and a TCP request to an address
-   that exists nowhere (203.0.113.7) must be answered: it can only arrive through the TUN device, the Xray-core
-   `tun` inbound, VLESS, and the Xray-core server (`app/src/main/go/cmd/e2e-server`) that also runs on the runner.
-   Before the connection and after the disconnect the same request must fail. Screenshots of every step are
-   exported as git blobs and as the `e2e-output` artifact. The scripts are in `.github/scripts` (`e2e.sh`,
-   `e2e-servers.sh`, `uitool.py`) and the server setup in `.github/e2e`.
+4. **e2e**: an Android 14 emulator (KVM, `.github/scripts/emulator.sh`) installs the APK and drives it for real:
+   - an `incy://add/...` link imports a subscription from a web server on the runner (title, traffic bar, days left
+     and the latency probe must show up), `incy://connect` brings the VPN up, and a TCP request to an address that
+     exists nowhere (203.0.113.7) must be answered: it can only arrive through the TUN device, the Xray-core `tun`
+     inbound, VLESS, and the Xray-core server (`app/src/main/go/cmd/e2e-server`) that also runs on the runner.
+     Before the connection and after the disconnect the same request must fail;
+   - a second run from a clean permission state presses the on-screen power button and answers the real
+     notification and VPN consent dialogs;
+   - the screen is read again with the Russian locale.
+   Screenshots of the steps and the logs are exported as git blobs (the "E2E files" annotation lists `name=sha`).
+   The scripts are in `.github/scripts` (`e2e.sh`, `e2e-servers.sh`, `uitool.py`) and the server setup in `.github/e2e`.
+
+The AAR and the APK travel between the jobs through `actions/cache`; the `voxel-vpn-apk`, `test-reports` and
+`e2e-output` artifacts are uploaded on a best-effort basis, because a repository whose artifact storage is full
+rejects every upload and must not fail the build for that.
 
 Locally (Go 1.27, JDK 21, Android SDK with an NDK):
 

@@ -12,6 +12,10 @@ import re
 import sys
 
 
+def read_dump():
+    return sys.stdin.buffer.read().decode("utf-8", "replace")
+
+
 def nodes(xml):
     return re.findall(r"<node [^>]*>", xml)
 
@@ -22,8 +26,9 @@ def attribute(node, name):
 
 
 def main():
+    sys.stdout.reconfigure(encoding="utf-8")
     if len(sys.argv) == 2 and sys.argv[1] == "texts":
-        for node in nodes(sys.stdin.read()):
+        for node in nodes(read_dump()):
             for name in ("text", "content-desc"):
                 value = attribute(node, name)
                 if value:
@@ -32,7 +37,7 @@ def main():
     if len(sys.argv) != 3 or sys.argv[1] not in ("has", "center"):
         sys.exit("usage: uitool.py has|center <regex> | texts")
     command, pattern = sys.argv[1], re.compile(sys.argv[2])
-    for node in nodes(sys.stdin.read()):
+    for node in nodes(read_dump()):
         if not pattern.search(node):
             continue
         if command == "has":

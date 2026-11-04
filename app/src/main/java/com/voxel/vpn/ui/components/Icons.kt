@@ -56,6 +56,18 @@ fun LogsGlyph(color: Color, modifier: Modifier = Modifier) {
     }
 }
 
+/** A plus sign: opens the "add a subscription" card. */
+@Composable
+fun PlusGlyph(color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val stroke = h * 0.09f
+        drawLine(color = color, start = Offset(w * 0.25f, h * 0.5f), end = Offset(w * 0.75f, h * 0.5f), strokeWidth = stroke, cap = StrokeCap.Round)
+        drawLine(color = color, start = Offset(w * 0.5f, h * 0.25f), end = Offset(w * 0.5f, h * 0.75f), strokeWidth = stroke, cap = StrokeCap.Round)
+    }
+}
+
 @Composable
 fun CloseGlyph(color: Color, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier) {

@@ -58,7 +58,7 @@ fun LogsScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(VoxelColors.Bg0.copy(alpha = 0.98f))
+            .background(VoxelColors.Bg0)
             .statusBarsPadding()
             .navigationBarsPadding()
             .padding(horizontal = 16.dp),
