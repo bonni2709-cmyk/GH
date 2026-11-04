@@ -10,6 +10,8 @@
 # Environment: E2E_APK (path of the APK), E2E_OUT (directory for the screenshots and logs).
 set -u
 
+export PATH="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}/platform-tools:$PATH"
+
 PKG=com.voxel.vpn
 APK="${E2E_APK:?set E2E_APK}"
 OUT="${E2E_OUT:?set E2E_OUT}"
