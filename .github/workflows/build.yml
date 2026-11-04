@@ -38,22 +38,38 @@ jobs:
           go vet ./...
           go test ./... -count=1 -v
 
+      # The AAR is handed to the app job through the Actions cache: it is keyed by the sources it is built from,
+      # so unchanged Go sources skip the slow gomobile build, and no artifact storage is used.
+      - name: Cache key of the AAR
+        id: key
+        run: echo "value=voxelcore-aar-${NDK_VERSION}-${{ hashFiles('app/src/main/go/go.mod', 'app/src/main/go/go.sum', 'app/src/main/go/voxelcore.go', 'app/src/main/go/build-aar.sh') }}" >> "$GITHUB_OUTPUT"
+
+      - name: Look for an AAR built from these sources
+        id: cache
+        uses: actions/cache/restore@v6
+        with:
+          path: app/libs/voxelcore.aar
+          key: ${{ steps.key.outputs.value }}
+          lookup-only: true
+
       - uses: android-actions/setup-android@v4
+        if: steps.cache.outputs.cache-hit != 'true'
         with:
           cmdline-tools-version: 14742923
           packages: "platform-tools ndk;${{ env.NDK_VERSION }}"
 
       - name: Build voxelcore.aar
+        if: steps.cache.outputs.cache-hit != 'true'
         run: |
           export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION"
           bash app/src/main/go/build-aar.sh
 
-      - uses: actions/upload-artifact@v7
+      - name: Keep the AAR for the app job
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
         with:
-          name: voxelcore-aar
           path: app/libs/voxelcore.aar
-          if-no-files-found: error
-          retention-days: 7
+          key: ${{ steps.key.outputs.value }}
 
   app:
     name: Android app (unit tests, Xray config check, APK)
@@ -66,10 +82,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v8
+      - name: Cache key of the AAR
+        id: key
+        run: echo "value=voxelcore-aar-${NDK_VERSION}-${{ hashFiles('app/src/main/go/go.mod', 'app/src/main/go/go.sum', 'app/src/main/go/voxelcore.go', 'app/src/main/go/build-aar.sh') }}" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch voxelcore.aar
+        uses: actions/cache/restore@v6
         with:
-          name: voxelcore-aar
-          path: app/libs
+          path: app/libs/voxelcore.aar
+          key: ${{ steps.key.outputs.value }}
+          fail-on-cache-miss: true
 
       - uses: actions/setup-java@v6
         with:
@@ -172,12 +194,20 @@ jobs:
           } | tee -a "$GITHUB_STEP_SUMMARY"
           "$tools/aapt2" dump badging "$apk" | grep -E "^(package|native-code)" | sed 's/^/::notice title=APK::/'
 
+      - name: Keep the APK for the export and e2e jobs
+        uses: actions/cache/save@v6
+        with:
+          path: app/build/outputs/apk/release/voxel-vpn-release.apk
+          key: voxel-vpn-apk-${{ github.run_id }}
+
+      # Best effort: GitHub refuses new artifacts once the repository's artifact storage is used up.
       - uses: actions/upload-artifact@v7
+        continue-on-error: true
         with:
           name: voxel-vpn-apk
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
 
       - name: Android lint
         id: lint
@@ -219,6 +249,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         if: always()
+        continue-on-error: true
         with:
           name: test-reports
           path: |
@@ -243,17 +274,19 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/download-artifact@v8
+      - name: Fetch the APK
+        uses: actions/cache/restore@v6
         with:
-          name: voxel-vpn-apk
-          path: apk
+          path: app/build/outputs/apk/release/voxel-vpn-release.apk
+          key: voxel-vpn-apk-${{ github.run_id }}
+          fail-on-cache-miss: true
 
       - name: Upload the blobs
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          apk="$(ls apk/*.apk | head -n1)"
+          apk="app/build/outputs/apk/release/voxel-vpn-release.apk"
           mkdir -p "$RUNNER_TEMP/parts"
           # 15 MB pieces keep every request far below the API's body limits; the notice lists them in order.
           split -b 15M -d -a 3 "$apk" "$RUNNER_TEMP/parts/part-"
@@ -288,7 +321,7 @@ jobs:
       run:
         shell: bash
     env:
-      E2E_APK: ${{ github.workspace }}/apk/voxel-vpn-release.apk
+      E2E_APK: ${{ github.workspace }}/app/build/outputs/apk/release/voxel-vpn-release.apk
       E2E_OUT: ${{ github.workspace }}/e2e-out
     steps:
       - name: Enable KVM
@@ -305,10 +338,12 @@ jobs:
 
       - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v8
+      - name: Fetch the APK
+        uses: actions/cache/restore@v6
         with:
-          name: voxel-vpn-apk
-          path: apk
+          path: app/build/outputs/apk/release/voxel-vpn-release.apk
+          key: voxel-vpn-apk-${{ github.run_id }}
+          fail-on-cache-miss: true
 
       - uses: actions/setup-go@v7
         with:
@@ -371,6 +406,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         if: always()
+        continue-on-error: true
         with:
           name: e2e-output
           path: e2e-out
