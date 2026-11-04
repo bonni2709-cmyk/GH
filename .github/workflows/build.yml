@@ -179,6 +179,49 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Android lint
+        id: lint
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          ./gradlew :app:lintDebug --console=plain 2>&1 | tee "$RUNNER_TEMP/lint.log"
+
+      - name: Lint findings
+        if: always() && steps.lint.outcome != 'skipped'
+        run: |
+          python3 - <<'PY'
+          import glob
+          import xml.etree.ElementTree as ET
+
+          def escape(text):
+              return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+          reports = glob.glob("app/build/reports/lint-results-debug.xml")
+          if not reports:
+              print("::notice title=Lint::no report was produced")
+          for report in reports:
+              issues = ET.parse(report).getroot().findall("issue")
+              counts = {}
+              for issue in issues:
+                  severity = issue.get("severity")
+                  counts[severity] = counts.get(severity, 0) + 1
+              print(f"::notice title=Lint::{len(issues)} findings {counts}")
+              important = {"NewApi", "MissingPermission", "ForegroundServicePermission", "ForegroundServiceType",
+                           "ExportedService", "UnspecifiedRegisterReceiverFlag", "InlinedApi", "MissingInflatedId"}
+              shown = 0
+              for issue in issues:
+                  if issue.get("severity") in ("Fatal", "Error") or issue.get("id") in important:
+                      location = issue.find("location")
+                      where = ""
+                      if location is not None:
+                          where = f'{location.get("file", "").split("/app/", 1)[-1]}:{location.get("line", "")}'
+                      text = f'{issue.get("severity")} {issue.get("id")}: {issue.get("message")} @ {where}'
+                      print("::warning title=Lint finding::" + escape(text))
+                      shown += 1
+                      if shown >= 25:
+                          break
+          PY
+
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -210,18 +253,27 @@ jobs:
           name: voxel-vpn-apk
           path: apk
 
-      - name: Upload the blob
+      - name: Upload the blobs
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           apk="$(ls apk/*.apk | head -n1)"
-          python3 - "$apk" > "$RUNNER_TEMP/blob.json" <<'PY'
+          mkdir -p "$RUNNER_TEMP/parts"
+          # 15 MB pieces keep every request far below the API's body limits; the notice lists them in order.
+          split -b 15M -d -a 3 "$apk" "$RUNNER_TEMP/parts/part-"
+          shas=""
+          for part in "$RUNNER_TEMP"/parts/part-*; do
+            python3 - "$part" > "$RUNNER_TEMP/blob.json" <<'PY'
           import base64, json, sys
           with open(sys.argv[1], "rb") as handle:
-              data = handle.read()
-          print(json.dumps({"content": base64.b64encode(data).decode("ascii"), "encoding": "base64"}))
+              print(json.dumps({"content": base64.b64encode(handle.read()).decode("ascii"), "encoding": "base64"}))
           PY
-          sha="$(gh api "repos/$GITHUB_REPOSITORY/git/blobs" --input "$RUNNER_TEMP/blob.json" --jq .sha)"
-          echo "::notice title=APK blob::sha=$sha size=$(stat -c %s "$apk") name=$(basename "$apk")"
-          echo "APK blob: $sha"
+            if ! sha="$(gh api -X POST "repos/$GITHUB_REPOSITORY/git/blobs" --input "$RUNNER_TEMP/blob.json" --jq .sha 2> "$RUNNER_TEMP/gh.err")"; then
+              echo "::error title=Blob upload failed::$(head -c 2000 "$RUNNER_TEMP/gh.err" | tr '\n' ' ')"
+              exit 1
+            fi
+            shas="${shas:+$shas,}$sha"
+          done
+          echo "::notice title=APK blobs::name=$(basename "$apk") size=$(stat -c %s "$apk") sha256=$(sha256sum "$apk" | cut -d' ' -f1) parts=$shas"
+          echo "APK parts: $shas"
