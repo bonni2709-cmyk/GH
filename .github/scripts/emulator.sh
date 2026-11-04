@@ -13,6 +13,9 @@ AVD="voxel"
 BOOT_TIMEOUT="${EMULATOR_BOOT_TIMEOUT:-1200}"
 SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
 export PATH="$SDK/cmdline-tools/latest/bin:$SDK/platform-tools:$SDK/emulator:$PATH"
+# avdmanager and the emulator must agree on where AVDs live (their defaults differ between SDK tool versions).
+export ANDROID_AVD_HOME="$HOME/.android/avd"
+mkdir -p "$ANDROID_AVD_HOME"
 WORK="${RUNNER_TEMP:-/tmp}/emulator"
 mkdir -p "$WORK"
 
@@ -59,7 +62,7 @@ install_image() {
   sed -i -E '/^(hw\.lcd\.(width|height|density)|hw\.ramSize|hw\.cpu\.ncore)=/d' "$config"
   printf 'hw.lcd.width=720\nhw.lcd.height=1280\nhw.lcd.density=320\nhw.ramSize=3072\nhw.cpu.ncore=2\n' >> "$config"
 
-  notice "image $chosen, emulator $(emulator -version 2> /dev/null | grep -m1 -i 'emulator version' | tr -d '\r')"
+  notice "image $chosen, emulator $(emulator -version 2>&1 | grep -m1 -i 'emulator version' | tr -d '\r')"
   notice "acceleration check: $(emulator -accel-check 2>&1 | tr '\n' ' ' | head -c 300)"
 }
 

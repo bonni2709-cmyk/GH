@@ -312,7 +312,7 @@ jobs:
     # that does not exist must come back through VLESS from the Xray server that runs on this runner.
     # The screenshots and logs are exported as git blobs, like the APK.
     name: Emulator end-to-end (import, connect, traffic through the tunnel)
-    needs: app
+    needs: core
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -343,6 +343,7 @@ jobs:
         with:
           path: app/build/outputs/apk/release/voxel-vpn-release.apk
           key: voxel-vpn-apk-${{ github.run_id }}
+          restore-keys: voxel-vpn-apk-
           fail-on-cache-miss: true
 
       - uses: actions/setup-go@v7

@@ -39,6 +39,7 @@ fail() {
   echo "::error title=E2E crash log::$(grep -E 'AndroidRuntime|FATAL EXCEPTION|ANR in|Process: ' "$OUT/logcat.txt" | tail -n 40 | head -c 6000 | escape)"
   echo "::error title=E2E app log::$(tail -n 60 "$OUT/app-log.txt" | head -c 9000 | escape)"
   echo "::error title=E2E screen texts::$(ui | python3 "$UITOOL" texts | head -c 2000 | escape)"
+  echo "::error title=E2E network::$( { adb shell 'ip addr | grep -E "^[0-9]+:|inet "; echo ---; ip rule | head -n 20; echo ---; ip route show table all | head -n 25'; adb shell dumpsys connectivity 2> /dev/null | grep -iE 'vpn|tun[0-9]' | head -n 12; } 2>&1 | tr -d '\r' | head -c 3500 | escape)"
   exit 1
 }
 
@@ -128,7 +129,7 @@ done
 wait_ui '(text|content-desc)="Protected"' 20 || fail "the screen does not say 'Protected' although the core is running"
 sleep 2
 shot 03-connected
-notice "3/6 connected through the VPN service"
+notice "3/6 connected through the VPN service; interfaces: $(adb shell 'ip addr | grep -E "^[0-9]+: (tun|xray)|inet 172"' | tr -d '\r' | tr '\n' '|' | head -c 400)"
 
 # ---- 4. traffic through the tunnel ---------------------------------------------------------------------------
 answer=""
