@@ -49,7 +49,7 @@ def digest(lines):
         if ERROR_LINE.search(line) and line not in seen:
             seen.add(line)
             out.append(line[:500])
-            if BLOCK_LINE.search(line):
+            if BLOCK_LINE.search(line) and not line.startswith("> Task"):
                 # the explanation follows the headline: keep a few lines of it
                 for follow in lines[i + 1 : i + 10]:
                     follow = follow.rstrip()
