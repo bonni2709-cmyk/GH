@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">VOXEL</string>
+
+    <string name="status_idle">Не подключено</string>
+    <string name="status_connecting">Подключение…</string>
+    <string name="status_connected">Защищено</string>
+    <string name="status_disconnecting">Отключение…</string>
+    <string name="status_failed">Не удалось подключиться</string>
+
+    <string name="hint_tap_connect">Нажмите, чтобы подключиться</string>
+    <string name="hint_tap_disconnect">Нажмите, чтобы отключиться</string>
+    <string name="hint_no_servers">Добавьте подписку, чтобы начать</string>
+
+    <string name="stat_time">Сеанс</string>
+    <string name="stat_download">Загрузка</string>
+    <string name="stat_upload">Отдача</string>
+
+    <string name="section_servers">Серверы</string>
+    <string name="action_test_all">Проверить все</string>
+    <string name="action_testing">Проверка…</string>
+    <string name="ping_ms">%1$d мс</string>
+    <string name="ping_failed">нет ответа</string>
+    <string name="ping_unavailable">н/д</string>
+    <string name="ping_unknown">—</string>
+
+    <string name="add_title">Добавить подписку или сервер</string>
+    <string name="add_hint">Ссылка incy:// или https://, vless://, vmess://, JSON</string>
+    <string name="action_paste">Вставить</string>
+    <string name="action_add">Добавить</string>
+    <string name="add_busy">Импорт…</string>
+
+    <string name="group_local">Добавленные ссылки</string>
+    <plurals name="servers_count">
+        <item quantity="one">%d сервер</item>
+        <item quantity="few">%d сервера</item>
+        <item quantity="many">%d серверов</item>
+        <item quantity="other">%d сервера</item>
+    </plurals>
+    <plurals name="days_left">
+        <item quantity="one">остался %d день</item>
+        <item quantity="few">осталось %d дня</item>
+        <item quantity="many">осталось %d дней</item>
+        <item quantity="other">осталось %d дня</item>
+    </plurals>
+    <string name="sub_traffic">%1$s из %2$s</string>
+    <string name="sub_traffic_unlimited">Использовано %1$s</string>
+    <string name="sub_expired">Срок истёк</string>
+
+    <string name="action_refresh">Обновить</string>
+    <string name="action_delete">Удалить</string>
+    <string name="action_cancel">Отмена</string>
+    <string name="delete_title">Удалить подписку?</string>
+    <string name="delete_text">«%1$s» и все её серверы будут удалены с этого устройства.</string>
+
+    <string name="action_logs">Журнал</string>
+    <string name="logs_title">Журнал</string>
+    <string name="logs_empty">Записей пока нет</string>
+    <string name="action_copy">Копировать</string>
+    <string name="action_clear">Очистить</string>
+    <string name="action_close">Закрыть</string>
+    <string name="msg_logs_copied">Журнал скопирован</string>
+
+    <string name="ipv6_label">IPv6</string>
+
+    <plurals name="msg_added">
+        <item quantity="one">Добавлен %1$d сервер из %2$s</item>
+        <item quantity="few">Добавлено %1$d сервера из %2$s</item>
+        <item quantity="many">Добавлено %1$d серверов из %2$s</item>
+        <item quantity="other">Добавлено %1$d сервера из %2$s</item>
+    </plurals>
+    <plurals name="msg_updated">
+        <item quantity="one">%2$s обновлена: %1$d сервер</item>
+        <item quantity="few">%2$s обновлена: %1$d сервера</item>
+        <item quantity="many">%2$s обновлена: %1$d серверов</item>
+        <item quantity="other">%2$s обновлена: %1$d сервера</item>
+    </plurals>
+    <string name="msg_skipped">Пропущено неподдерживаемых записей: %1$d</string>
+    <string name="msg_import_failed">Не удалось импортировать: %1$s</string>
+    <string name="msg_partial_failed">Часть источников не загрузилась: %1$s</string>
+    <string name="msg_refresh_failed">Не удалось обновить %1$s: %2$s</string>
+    <string name="msg_removed">«%1$s» удалена</string>
+    <string name="msg_vpn_denied">Разрешение на VPN не выдано</string>
+    <string name="msg_no_server">Сначала добавьте подписку или сервер</string>
+    <string name="msg_clipboard_empty">Буфер обмена пуст</string>
+    <string name="msg_status">Состояние: %1$s</string>
+
+    <string name="about_version">VOXEL %1$s · Xray-core %2$s</string>
+
+    <string name="notif_channel">Состояние VPN</string>
+    <string name="notif_channel_desc">Показывает, что VPN работает</string>
+    <string name="notif_connecting">Подключение к %1$s…</string>
+    <string name="notif_connected">Защищено через %1$s</string>
+    <string name="notif_disconnect">Отключить</string>
+
+    <string name="err_no_server">Нет сервера для подключения</string>
+    <string name="err_tun">Система отказалась создать VPN-интерфейс</string>
+    <string name="err_core_stopped">Ядро неожиданно остановилось</string>
+    <string name="err_core_failed">Не удалось запустить ядро: %1$s</string>
+    <string name="err_host_unresolved">Не удаётся определить адрес сервера %1$s</string>
+
+    <string name="err_link_malformed">Некорректная ссылка</string>
+    <string name="err_link_empty">В ссылке нет данных для импорта</string>
+    <string name="err_link_version">Формат ссылки новее, чем понимает приложение</string>
+    <string name="err_link_auth">Ссылка повреждена или изменена</string>
+    <string name="err_link_unsupported">Этот тип ссылок пока не поддерживается</string>
+</resources>

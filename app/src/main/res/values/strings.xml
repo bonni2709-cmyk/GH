@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">VOXEL</string>
+
+    <string name="status_idle">Not connected</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_connected">Protected</string>
+    <string name="status_disconnecting">Disconnecting…</string>
+    <string name="status_failed">Connection failed</string>
+
+    <string name="hint_tap_connect">Tap to connect</string>
+    <string name="hint_tap_disconnect">Tap to disconnect</string>
+    <string name="hint_no_servers">Add a subscription to get started</string>
+
+    <string name="stat_time">Session</string>
+    <string name="stat_download">Download</string>
+    <string name="stat_upload">Upload</string>
+
+    <string name="section_servers">Servers</string>
+    <string name="action_test_all">Test all</string>
+    <string name="action_testing">Testing…</string>
+    <string name="ping_ms">%1$d ms</string>
+    <string name="ping_failed">timeout</string>
+    <string name="ping_unavailable">n/a</string>
+    <string name="ping_unknown">—</string>
+
+    <string name="add_title">Add subscription or server</string>
+    <string name="add_hint">incy://… or https:// link, vless://, vmess://, JSON</string>
+    <string name="action_paste">Paste</string>
+    <string name="action_add">Add</string>
+    <string name="add_busy">Importing…</string>
+
+    <string name="group_local">Imported links</string>
+    <plurals name="servers_count">
+        <item quantity="one">%d server</item>
+        <item quantity="other">%d servers</item>
+    </plurals>
+    <plurals name="days_left">
+        <item quantity="one">%d day left</item>
+        <item quantity="other">%d days left</item>
+    </plurals>
+    <string name="sub_traffic">%1$s of %2$s</string>
+    <string name="sub_traffic_unlimited">%1$s used</string>
+    <string name="sub_expired">Expired</string>
+
+    <string name="action_refresh">Refresh</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="delete_title">Delete subscription?</string>
+    <string name="delete_text">“%1$s” and all of its servers will be removed from this device.</string>
+
+    <string name="action_logs">Logs</string>
+    <string name="logs_title">Logs</string>
+    <string name="logs_empty">No log lines yet</string>
+    <string name="action_copy">Copy</string>
+    <string name="action_clear">Clear</string>
+    <string name="action_close">Close</string>
+    <string name="msg_logs_copied">Logs copied</string>
+
+    <string name="ipv6_label">IPv6</string>
+
+    <plurals name="msg_added">
+        <item quantity="one">Added %1$d server from %2$s</item>
+        <item quantity="other">Added %1$d servers from %2$s</item>
+    </plurals>
+    <plurals name="msg_updated">
+        <item quantity="one">%2$s updated: %1$d server</item>
+        <item quantity="other">%2$s updated: %1$d servers</item>
+    </plurals>
+    <string name="msg_skipped">Unsupported entries skipped: %1$d</string>
+    <string name="msg_import_failed">Import failed: %1$s</string>
+    <string name="msg_partial_failed">Some sources could not be loaded: %1$s</string>
+    <string name="msg_refresh_failed">Could not refresh %1$s: %2$s</string>
+    <string name="msg_removed">Removed “%1$s”</string>
+    <string name="msg_vpn_denied">VPN permission was not granted</string>
+    <string name="msg_no_server">Add a subscription or a server first</string>
+    <string name="msg_clipboard_empty">The clipboard is empty</string>
+    <string name="msg_status">Status: %1$s</string>
+
+    <string name="about_version">VOXEL %1$s · Xray-core %2$s</string>
+
+    <string name="notif_channel">VPN status</string>
+    <string name="notif_channel_desc">Shows that the VPN is running</string>
+    <string name="notif_connecting">Connecting to %1$s…</string>
+    <string name="notif_connected">Protected via %1$s</string>
+    <string name="notif_disconnect">Disconnect</string>
+
+    <string name="err_no_server">There is no server to connect to</string>
+    <string name="err_tun">The system refused to create the VPN interface</string>
+    <string name="err_core_stopped">The core stopped unexpectedly</string>
+    <string name="err_core_failed">Cannot start the core: %1$s</string>
+    <string name="err_host_unresolved">Cannot resolve the server address %1$s</string>
+
+    <string name="err_link_malformed">This link is not valid</string>
+    <string name="err_link_empty">The link contains nothing to import</string>
+    <string name="err_link_version">This link format is newer than the app understands</string>
+    <string name="err_link_auth">The link is damaged or has been altered</string>
+    <string name="err_link_unsupported">This kind of link is not supported yet</string>
+</resources>

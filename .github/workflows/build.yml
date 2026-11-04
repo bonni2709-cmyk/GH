@@ -54,3 +54,174 @@ jobs:
           path: app/libs/voxelcore.aar
           if-no-files-found: error
           retention-days: 7
+
+  app:
+    name: Android app (unit tests, Xray config check, APK)
+    needs: core
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: voxelcore-aar
+          path: app/libs
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Public API of the gomobile binding
+        run: |
+          unzip -p app/libs/voxelcore.aar classes.jar > "$RUNNER_TEMP/voxelcore-classes.jar"
+          api="$(javap -cp "$RUNNER_TEMP/voxelcore-classes.jar" voxelcore.Voxelcore voxelcore.LogSink)"
+          echo "$api"
+          echo "::notice title=voxelcore API::$(printf '%s' "$api" | python3 -c 'import sys; print(sys.stdin.read().replace("%","%25").replace("\r","%0D").replace("\n","%0A"))')"
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: app/src/main/go/go.mod
+          cache-dependency-path: app/src/main/go/go.sum
+
+      - uses: android-actions/setup-android@v4
+        with:
+          cmdline-tools-version: 14742923
+          packages: "platform-tools"
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - name: Unit tests
+        id: unit
+        run: |
+          set -o pipefail
+          ./gradlew :app:testDebugUnitTest --console=plain --stacktrace 2>&1 | tee "$RUNNER_TEMP/unit.log"
+
+      - name: Report the unit test failure
+        if: failure() && steps.unit.outcome == 'failure'
+        run: python3 .github/scripts/annotate_log.py "$RUNNER_TEMP/unit.log" "Unit tests"
+
+      - name: Unit test totals
+        if: always() && steps.unit.outcome != 'skipped'
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          tests = failures = errors = skipped = 0
+          files = glob.glob("app/build/test-results/testDebugUnitTest/*.xml")
+          for path in files:
+              root = ET.parse(path).getroot()
+              tests += int(root.get("tests", 0))
+              failures += int(root.get("failures", 0))
+              errors += int(root.get("errors", 0))
+              skipped += int(root.get("skipped", 0))
+          print(f"::notice title=Unit tests::{len(files)} classes, {tests} tests, {failures} failures, {errors} errors, {skipped} skipped")
+          PY
+          ls -1 app/build/xray-configs 2>/dev/null | sed 's/^/config: /' || true
+
+      - name: Load every generated configuration into Xray-core
+        id: xray
+        working-directory: app/src/main/go
+        env:
+          VOXEL_CONFIG_DIR: ${{ github.workspace }}/app/build/xray-configs
+        run: |
+          set -o pipefail
+          go test ./... -count=1 -v 2>&1 | tee "$RUNNER_TEMP/xray.log"
+
+      - name: Report the Xray configuration failure
+        if: failure() && steps.xray.outcome == 'failure'
+        run: python3 .github/scripts/annotate_log.py "$RUNNER_TEMP/xray.log" "Xray config check"
+
+      - name: Xray config check totals
+        if: always() && steps.xray.outcome != 'skipped'
+        run: |
+          passed="$(grep -c -- '--- PASS' "$RUNNER_TEMP/xray.log" || true)"
+          failed="$(grep -c -- '--- FAIL' "$RUNNER_TEMP/xray.log" || true)"
+          skipped="$(grep -c -- '--- SKIP' "$RUNNER_TEMP/xray.log" || true)"
+          echo "::notice title=Xray config check::$passed passed, $failed failed, $skipped skipped"
+
+      - name: Build the release APK
+        id: apk
+        run: |
+          set -o pipefail
+          ./gradlew :app:assembleRelease --console=plain --stacktrace 2>&1 | tee "$RUNNER_TEMP/apk.log"
+
+      - name: Report the build failure
+        if: failure() && steps.apk.outcome == 'failure'
+        run: python3 .github/scripts/annotate_log.py "$RUNNER_TEMP/apk.log" "Release build"
+
+      - name: Inspect the APK
+        continue-on-error: true
+        run: |
+          apk="$(ls app/build/outputs/apk/release/*.apk | head -n1)"
+          tools="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -n1)"
+          {
+            echo "### $(basename "$apk") ($(stat -c %s "$apk") bytes)"
+            echo '```'
+            "$tools/aapt2" dump badging "$apk" | grep -E "^(package|sdkVersion|targetSdkVersion|uses-permission|application-label:|launchable-activity|native-code)"
+            echo '```'
+            echo '```'
+            "$tools/apksigner" verify --verbose --print-certs "$apk"
+            echo '```'
+            echo '```'
+            unzip -l "$apk" | grep -E "lib/[^/]+/libgojni.so|classes[0-9]*.dex|AndroidManifest.xml"
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          "$tools/aapt2" dump badging "$apk" | grep -E "^(package|native-code)" | sed 's/^/::notice title=APK::/'
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: voxel-vpn-apk
+          path: app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: test-reports
+          path: |
+            app/build/reports/tests
+            app/build/test-results
+            app/build/xray-configs
+          if-no-files-found: ignore
+          retention-days: 7
+
+  export:
+    # The APK is also stored as an unreferenced git blob, so it can be fetched with the plain REST API
+    # (gh api repos/<owner>/<repo>/git/blobs/<sha> -H 'Accept: application/vnd.github.raw') where the
+    # artifact download hosts are not reachable.
+    name: Publish the APK as a git blob
+    needs: app
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: voxel-vpn-apk
+          path: apk
+
+      - name: Upload the blob
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          apk="$(ls apk/*.apk | head -n1)"
+          python3 - "$apk" > "$RUNNER_TEMP/blob.json" <<'PY'
+          import base64, json, sys
+          with open(sys.argv[1], "rb") as handle:
+              data = handle.read()
+          print(json.dumps({"content": base64.b64encode(data).decode("ascii"), "encoding": "base64"}))
+          PY
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/git/blobs" --input "$RUNNER_TEMP/blob.json" --jq .sha)"
+          echo "::notice title=APK blob::sha=$sha size=$(stat -c %s "$apk") name=$(basename "$apk")"
+          echo "APK blob: $sha"
