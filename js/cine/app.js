@@ -106,7 +106,14 @@
   };
 
   /* ------------------------------------------------------------- сцена */
-  App.pages = function () { return Cine.VOL1 || [Cine.buildChapter1Page5]; };
+  App.pages = function () {
+    const v1 = Cine.VOL1 || [];
+    const v2 = Cine.VOL2 || [];
+    const all = v1.concat(v2);
+    return all.length ? all : [Cine.buildChapter1Page5];
+  };
+
+  /** номер тома/страницы для HUD берём из данных самой страницы */
 
   App.loadPage = function (index) {
     const pages = App.pages();
